@@ -2,6 +2,9 @@
   "name": "aura",
   "private": true,
   "scripts": {
+    "install:backend": "cd backend && bun install",
+    "install:frontend": "cd frontend && bun install",
+
     "dev:backend": "cd backend && bun run dev",
     "dev:frontend": "cd frontend && bun run dev",
 
