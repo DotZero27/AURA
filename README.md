@@ -1,15 +1,11 @@
-# aura
+# AURA
 
-To install dependencies:
-
+To start frontend:
 ```bash
-bun install
+bun run dev:frontend
 ```
 
-To run:
-
+To start backend:
 ```bash
-bun run index.ts
+bun run dev:backend
 ```
-
-This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

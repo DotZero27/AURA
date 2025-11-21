@@ -8,8 +8,6 @@ const serverSchema = z.object({
 	NODE_ENV: z.string(),
 	// Server
 	PORT: z.string().optional().default("8000"),
-	// Database
-	DATABASE_URL: z.string().min(1),
 
 	// Supabase
 	SUPABASE_URL: z.string().min(1),
@@ -30,12 +28,11 @@ if (!_serverEnv.success) {
 	throw new Error("Invalid environment variables");
 }
 
-const { NODE_ENV, PORT, DATABASE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, SENTRY_DSN } = _serverEnv.data;
+const { NODE_ENV, PORT, SUPABASE_ANON_KEY, SUPABASE_URL, SENTRY_DSN } = _serverEnv.data;
 
 export const env = {
 	NODE_ENV,
 	PORT: parseInt(PORT),
-	DATABASE_URL,
 	SUPABASE_ANON_KEY,
 	SUPABASE_URL,
 	SENTRY_DSN,
