@@ -202,6 +202,12 @@ export default function RefereeClient() {
   const teamAId = teamIds[0] ? String(teamIds[0]) : null;
   const teamBId = teamIds[1] ? String(teamIds[1]) : null;
 
+  // Get serving team information from match state
+  const servingTeamId = matchState?.serving_team_id;
+  const serverSequence = matchState?.server_sequence;
+  const isTeamAServing = servingTeamId && String(servingTeamId) === teamAId;
+  const isTeamBServing = servingTeamId && String(servingTeamId) === teamBId;
+
   // Check if all positions are assigned
   const allPositionsAssigned =
     positions.pos1 &&
@@ -402,6 +408,29 @@ export default function RefereeClient() {
           </div>
         </div>
 
+        {/* Serving Team Indicator */}
+        {isMatchStarted && servingTeamId && (
+          <div className="mb-4 flex items-center justify-center gap-2">
+            <div className="text-sm text-gray-600">Serving:</div>
+            <div
+              className={cn(
+                "px-3 py-1 rounded-full text-sm font-semibold",
+                isTeamAServing
+                  ? "bg-blue-100 text-blue-700"
+                  : isTeamBServing
+                  ? "bg-red-100 text-red-700"
+                  : "bg-gray-100 text-gray-700"
+              )}
+            >
+              {isTeamAServing
+                ? `Team A (Server ${serverSequence || ""})`
+                : isTeamBServing
+                ? `Team B (Server ${serverSequence || ""})`
+                : "Unknown"}
+            </div>
+          </div>
+        )}
+
         {/* Start Match Button - Show when all positions assigned but match not started */}
         {allPositionsAssigned && !isMatchStarted && (
           <div className="mb-4 flex justify-center">
@@ -439,7 +468,12 @@ export default function RefereeClient() {
               teamB.length > 0 &&
               isTeamAssigned("left") &&
               isTeamAssigned("right") && (
-                <div className="col-span-1 bg-[#3E7D68] flex items-center justify-center min-h-[200px]">
+                <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
+                  {isTeamAServing && (
+                    <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
+                      SERVING
+                    </div>
+                  )}
                   {teamAId ? (
                     <ScoreDrawer
                       teamId={teamAId}
@@ -450,7 +484,10 @@ export default function RefereeClient() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-white bg-[#ABD1C4] rounded-full"
+                          className={cn(
+                            "text-white bg-[#ABD1C4] rounded-full",
+                            isTeamAServing && "ring-2 ring-blue-500 ring-offset-2"
+                          )}
                         >
                           <Plus className="size-6 text-gray-800" />
                         </Button>
@@ -625,7 +662,12 @@ export default function RefereeClient() {
               teamB.length > 0 &&
               isTeamAssigned("left") &&
               isTeamAssigned("right") && (
-                <div className="col-span-1 bg-[#3E7D68] flex items-center justify-center min-h-[200px]">
+                <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
+                  {isTeamBServing && (
+                    <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
+                      SERVING
+                    </div>
+                  )}
                   {teamBId ? (
                     <ScoreDrawer
                       teamId={teamBId}
@@ -636,7 +678,10 @@ export default function RefereeClient() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-white bg-[#ABD1C4] rounded-full"
+                          className={cn(
+                            "text-white bg-[#ABD1C4] rounded-full",
+                            isTeamBServing && "ring-2 ring-blue-500 ring-offset-2"
+                          )}
                         >
                           <Plus className="size-6 text-gray-800" />
                         </Button>
