@@ -508,8 +508,8 @@ export default function RefereeClient() {
 
             {/* Center Grid */}
             <div className="col-span-3 relative">
-              {/* Team Swap Button - Enabled when at least one team is assigned */}
-              {(isTeamAssigned("left") || isTeamAssigned("right")) && (
+              {/* Team Swap Button - Only enabled before match starts */}
+              {(isTeamAssigned("left") || isTeamAssigned("right")) && !isMatchStarted && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                   <Button
                     variant="ghost"
@@ -548,14 +548,17 @@ export default function RefereeClient() {
                     <>
                       {/* Top - pos1 */}
                       <div className="py-8 flex flex-col items-center justify-center min-h-[100px] border-b p-2 relative">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
-                          onClick={() => handleSwap("left")}
-                        >
-                          <ArrowUpDown className="text-gray-600" />
-                        </Button>
+                        {!isMatchStarted && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
+                            onClick={() => handleSwap("left")}
+                            title="Swap positions within team"
+                          >
+                            <ArrowUpDown className="text-gray-600" />
+                          </Button>
+                        )}
                         <div className="flex flex-col items-center gap-1 w-full">
                           <div className="relative group">
                             <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
@@ -613,14 +616,17 @@ export default function RefereeClient() {
                     <>
                       {/* Top - pos3 */}
                       <div className="py-8 flex flex-col items-center justify-center min-h-[100px] border-b p-2 relative">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
-                          onClick={() => handleSwap("right")}
-                        >
-                          <ArrowUpDown className="text-gray-600" />
-                        </Button>
+                        {!isMatchStarted && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
+                            onClick={() => handleSwap("right")}
+                            title="Swap positions within team"
+                          >
+                            <ArrowUpDown className="text-gray-600" />
+                          </Button>
+                        )}
                         <div className="flex flex-col items-center gap-1 w-full">
                           <div className="relative group">
                             <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
