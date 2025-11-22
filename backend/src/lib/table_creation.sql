@@ -76,7 +76,7 @@ CREATE TABLE courts (
 -- RATINGS
 CREATE TABLE ratings (
   id SERIAL PRIMARY KEY,
-  player_id INTEGER REFERENCES players(id),
+  player_id INTEGER REFERENCES players(id) UNIQUE,
   aura_mu FLOAT,
   aura_sigma FLOAT,
   last_updated TIMESTAMPTZ DEFAULT NOW()

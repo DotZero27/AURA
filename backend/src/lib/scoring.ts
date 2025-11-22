@@ -418,7 +418,3 @@ app.get('/api/match/:id', async (c) => {
     }
 });
 
-export default {
-    port: 8000,
-    fetch: app.fetch,
-};

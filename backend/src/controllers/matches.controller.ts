@@ -13,6 +13,7 @@ import type {
 } from "@/utils/validation";
 // Import types and constants from scoring.ts
 import { POINTS_TO_WIN, WIN_BY, type ScoreMetadata } from "@/lib/scoring";
+import { update_player_ratings_in_db,blended_point_prob,match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
 
 // Helper: Verify teams and return IDs strictly (A = Lower ID, B = Higher ID)
 async function getMatchContext(matchId: number) {
@@ -701,7 +702,6 @@ export async function recordPoint(c: Context<AuthContext>) {
       throw new HTTPException(400, { message: "Invalid match ID" });
     }
 
-    // Get context and validate (using exported function from scoring.ts)
     const ctx = await getMatchContext(matchId);
 
     if (ctx.matchStatus === "completed") {
@@ -710,7 +710,6 @@ export async function recordPoint(c: Context<AuthContext>) {
       });
     }
 
-    // Validate winner team belongs to match
     if (
       body.rally_winner_team_id !== ctx.teamA_id &&
       body.rally_winner_team_id !== ctx.teamB_id
@@ -720,7 +719,6 @@ export async function recordPoint(c: Context<AuthContext>) {
       });
     }
 
-    // Fetch current state
     const { data: current, error } = await supabase
       .from("scores")
       .select("*")
@@ -735,7 +733,6 @@ export async function recordPoint(c: Context<AuthContext>) {
       });
     }
 
-    // Unpack state (logic from scoring.ts route handler)
     let newScoreA = current.team_a_score;
     let newScoreB = current.team_b_score;
     let servingTeam = current.serving_team_id;
@@ -746,37 +743,31 @@ export async function recordPoint(c: Context<AuthContext>) {
 
     // --- SCENARIO 1: SERVING TEAM WINS RALLY ---
     if (isServerWinner) {
-      // Increment Score & Swap Positions
       if (servingTeam === ctx.teamA_id) {
         newScoreA++;
-        // Swap Team A (Right <-> Left)
         const temp = metadata.team_a_pos.right_player_id;
         metadata.team_a_pos.right_player_id =
           metadata.team_a_pos.left_player_id;
         metadata.team_a_pos.left_player_id = temp;
       } else {
         newScoreB++;
-        // Swap Team B (Right <-> Left)
         const temp = metadata.team_b_pos.right_player_id;
         metadata.team_b_pos.right_player_id =
           metadata.team_b_pos.left_player_id;
         metadata.team_b_pos.left_player_id = temp;
       }
-      // Sequence remains same
     }
     // --- SCENARIO 2: SIDE OUT ---
     else {
       if (sequence === 1) {
-        sequence = 2; // Second server
+        sequence = 2;
       } else {
-        sequence = 1; // Hand over
+        sequence = 1;
         servingTeam =
           servingTeam === ctx.teamA_id ? ctx.teamB_id : ctx.teamA_id;
       }
-      // No score change, No position swap
     }
 
-    // Insert new state
     const { data: newState, error: insertErr } = await supabase
       .from("scores")
       .insert({
@@ -794,7 +785,6 @@ export async function recordPoint(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: insertErr.message });
     }
 
-    // Check win condition (Standard: 11 points, Win by 2)
     let matchComplete = false;
     let winnerId = null;
 
@@ -807,7 +797,6 @@ export async function recordPoint(c: Context<AuthContext>) {
     }
 
     if (matchComplete) {
-      // Mark completed and set end time
       await supabase
         .from("matches")
         .update({
@@ -817,18 +806,74 @@ export async function recordPoint(c: Context<AuthContext>) {
         })
         .eq("id", matchId);
 
-      // Update AURA of players
-      // ...
+      const teamA_ids = [
+        Number(metadata.team_a_pos.right_player_id),
+        Number(metadata.team_a_pos.left_player_id)
+      ];
+      const teamB_ids = [
+        Number(metadata.team_b_pos.right_player_id),
+        Number(metadata.team_b_pos.left_player_id)
+      ];
+
+      await update_player_ratings_in_db(
+        matchId,
+        teamA_ids,
+        teamB_ids,
+        newScoreA,
+        newScoreB
+      );
+      console.log(`[Match ${matchId}] Completed. Ratings updated.`);
     }
 
-    // Live Score Calculation and Send Websocket event to frontend
-    // ...
+    // --- Live Score Calculation & Logging ---
+    const tA_ids = [
+      Number(metadata.team_a_pos.right_player_id),
+      Number(metadata.team_a_pos.left_player_id)
+    ];
+    const tB_ids = [
+      Number(metadata.team_b_pos.right_player_id),
+      Number(metadata.team_b_pos.left_player_id)
+    ];
+    const allIds = [...tA_ids, ...tB_ids];
+
+    const { data: ratingData } = await supabase
+      .from('ratings')
+      .select('player_id, aura_mu, aura_sigma')
+      .in('player_id', allIds);
+
+    const getStat = (id: number) => {
+      const r = ratingData?.find(x => x.player_id === id);
+      return { 
+        id, 
+        mu: r?.aura_mu ?? 25.0, 
+        sigma: r?.aura_sigma ?? 8.33 
+      };
+    };
+
+    const teamA_stats = tA_ids.map(getStat);
+    const teamB_stats = tB_ids.map(getStat);
+
+    const muA = (teamA_stats[0].mu + teamA_stats[1].mu) / 2;
+    const sigmaA = Math.sqrt((Math.pow(teamA_stats[0].sigma, 2) + Math.pow(teamA_stats[1].sigma, 2)) / 2);
+    const muB = (teamB_stats[0].mu + teamB_stats[1].mu) / 2;
+    const sigmaB = Math.sqrt((Math.pow(teamB_stats[0].sigma, 2) + Math.pow(teamB_stats[1].sigma, 2)) / 2);
+
+    const p_blend = blended_point_prob(
+      muA, sigmaA, muB, sigmaB,
+      newScoreA, newScoreB, POINTS_TO_WIN
+    );
+
+    const win_prob_A = match_prob_with_beta_uncertainty(
+      p_blend, newScoreA, newScoreB, POINTS_TO_WIN
+    );
+
+    console.log(`[Match ${matchId}] Point: ${newScoreA}-${newScoreB}. Win Prob Team A: ${(win_prob_A * 100).toFixed(2)}%`);
 
     return c.json({
       data: {
         success: true,
-        score_1_2: newScoreA, // Integer score for Team A
-        score_3_4: newScoreB, // Integer score for Team B
+        score_1_2: newScoreA,
+        score_3_4: newScoreB,
         teamA: newScoreA,
         teamB: newScoreB,
         team_a_score: newScoreA,
@@ -848,7 +893,6 @@ export async function recordPoint(c: Context<AuthContext>) {
     if (error instanceof HTTPException) {
       throw error;
     }
-    // Convert Error to HTTPException for consistent error handling
     const errorMessage = (error as Error).message;
     if (errorMessage.includes("does not belong to this match")) {
       throw new HTTPException(400, { message: errorMessage });
