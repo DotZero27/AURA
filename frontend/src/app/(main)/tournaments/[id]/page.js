@@ -75,6 +75,7 @@ export default function TournamentDetailsPage() {
     match_format,
     registration_fee,
     registered_count,
+    registered_players,
   } = tournament;
 
   const category =
@@ -93,11 +94,11 @@ export default function TournamentDetailsPage() {
         <header className="sticky top-0 bg-white border-b z-10">
           <div className="flex items-center justify-between px-4 py-3">
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="size-5" />
             </Button>
             <h1 className="text-lg font-bold">Tournaments</h1>
             <Button variant="ghost" size="icon">
-              <MoreVertical className="w-5 h-5" />
+              <MoreVertical className="size-5" />
             </Button>
           </div>
         </header>
@@ -108,37 +109,31 @@ export default function TournamentDetailsPage() {
         <div className="w-full h-[412px] bg-gray-200 rounded-b-3xl" />
 
         {/* Tournament Overview Card */}
-        <Card className="mx-4 p-4 -mt-12">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-1">{name}</h2>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Pickleball</span>
-                <span>·</span>
-                <span>{category}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Star className="size-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-semibold">4.8</span>
+        <Card className="mx-4 p-4 gap-4 -mt-12">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold mb-1">{name}</h2>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Pickleball</span>
+              <span>·</span>
+              <span>{category}</span>
             </div>
           </div>
 
-          <div className="space-y-2 mt-4">
+          <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Clock className="w-4 h-4" />
+              <Clock className="size-4" />
               <span>Durations</span>
               <span className="ml-auto">
                 {formatTime(start_date)} - {formatTime(end_date)}
               </span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Calendar className="w-4 h-4" />
+              <Calendar className="size-4" />
               <span>Date</span>
               <span className="ml-auto">{formatDateWithDay(start_date)}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Users className="w-4 h-4" />
+              <Users className="size-4" />
               <span>Players</span>
               <div className="ml-auto flex items-center gap-2">
                 <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -168,7 +163,7 @@ export default function TournamentDetailsPage() {
                 </p>
               </div>
               <Button variant="ghost" size="icon">
-                <MapPin className="w-5 h-5" />
+                <MapPin className="size-5" />
               </Button>
             </div>
           </Card>
@@ -195,7 +190,7 @@ export default function TournamentDetailsPage() {
                   <p className="text-sm text-gray-600">Host</p>
                 </div>
                 <Button variant="ghost" size="icon">
-                  <Phone className="w-5 h-5" />
+                  <Phone className="size-5" />
                 </Button>
               </div>
             </Card>
@@ -218,7 +213,7 @@ export default function TournamentDetailsPage() {
                       </p>
                     </div>
                     <Button variant="ghost" size="icon">
-                      <Phone className="w-5 h-5" />
+                      <Phone className="size-5" />
                     </Button>
                   </div>
                 </Card>
@@ -231,16 +226,40 @@ export default function TournamentDetailsPage() {
         <div className="mx-4">
           <h3 className="font-bold text-lg mb-2">Players</h3>
           <div className="space-y-2">
-            {/* This would be populated from backend */}
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-full" />
-                <div className="flex-1">
-                  <p className="font-medium">Player Name</p>
-                  <p className="text-sm text-gray-600">7.0 AURA</p>
+            {registered_players && registered_players.length > 0 ? (
+              registered_players.map((player) => (
+                <Card key={player.id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    {player.photo_url ? (
+                      // <img
+                      //   src={player.photo_url}
+                      //   alt={player.name || player.username}
+                      //   className="size-12 rounded-full object-cover"
+                      // />
+                      <div className="size-12 bg-gray-200 rounded-full" />
+                    ) : (
+                      <div className="size-12 bg-gray-200 rounded-full" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {player.name || player.username}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {player.aura
+                          ? `${player.aura.toFixed(1)} AURA`
+                          : "No rating"}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <Card className="p-4">
+                <div className="text-center text-gray-500 text-sm">
+                  No players registered yet
                 </div>
-              </div>
-            </Card>
+              </Card>
+            )}
           </div>
         </div>
 
@@ -253,7 +272,7 @@ export default function TournamentDetailsPage() {
               const startTime = new Date(start_date);
               const now = new Date();
               const isRegistered = tournament?.registered;
-              
+
               if (isRegistered || startTime <= now) {
                 router.push(`/tournaments/${params.id}/stats`);
               } else {

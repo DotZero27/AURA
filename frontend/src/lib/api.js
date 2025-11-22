@@ -58,6 +58,16 @@ export const tournamentsApi = {
     return apiClient.get("/tournaments/hosted");
   },
 
+  // GET /tournaments/referee - Get tournaments where current player is a referee
+  getReferee: () => {
+    return apiClient.get("/tournaments/referee");
+  },
+
+  // GET /tournaments/registered - Get tournaments where current player is registered
+  getRegistered: () => {
+    return apiClient.get("/tournaments/registered");
+  },
+
   // POST /tournaments/:id/referees - Add a referee to a tournament
   addReferee: (id, playerId) => {
     return apiClient.post(`/tournaments/${id}/referees`, {

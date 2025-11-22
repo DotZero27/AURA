@@ -14,6 +14,7 @@ import type {
 // Import types and constants from scoring.ts
 import { POINTS_TO_WIN, WIN_BY, type ScoreMetadata } from "@/lib/scoring";
 import { update_player_ratings_in_db,blended_point_prob,match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
+import { broadcastMatchScore, broadcastMatchEnd } from "@/lib/websocket";
 
 // Helper: Verify teams and return IDs strictly (A = Lower ID, B = Higher ID)
 async function getMatchContext(matchId: number) {
@@ -669,6 +670,9 @@ export async function startMatch(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: updateError.message });
     }
 
+    // Broadcast initial score (0-0) when match starts
+    broadcastMatchScore(matchId, 0, 0, 50);
+
     return c.json({
       data: {
         success: true,
@@ -823,6 +827,9 @@ export async function recordPoint(c: Context<AuthContext>) {
         newScoreB
       );
       console.log(`[Match ${matchId}] Completed. Ratings updated.`);
+      
+      // Broadcast match end event
+      broadcastMatchEnd(matchId, winnerId);
     }
 
     // --- Live Score Calculation & Logging ---
@@ -867,7 +874,10 @@ export async function recordPoint(c: Context<AuthContext>) {
       p_blend, newScoreA, newScoreB, POINTS_TO_WIN
     );
 
-    console.log(`[Match ${matchId}] Point: ${newScoreA}-${newScoreB}. Win Prob Team A: ${(win_prob_A * 100).toFixed(2)}%`);
+    console.log(`[Match ${matchId}] Point: ${newScoreA}-${newScoreB}. Win Prob Team A: ${(win_prob_A * 100).toFixed(1)}%`);
+
+    // Broadcast score update to all connected WebSocket clients
+    broadcastMatchScore(matchId, newScoreA, newScoreB, Number((win_prob_A*100).toFixed(1)));
 
     return c.json({
       data: {
@@ -960,6 +970,7 @@ export async function undoMatch(c: Context<AuthContext>) {
     // Revert match status logic
     const scoreA = current.team_a_score;
     const scoreB = current.team_b_score;
+    const metadata = current.metadata as ScoreMetadata;
 
     const isWinA = scoreA >= POINTS_TO_WIN && scoreA - scoreB >= WIN_BY;
     const isWinB = scoreB >= POINTS_TO_WIN && scoreB - scoreA >= WIN_BY;
@@ -975,6 +986,53 @@ export async function undoMatch(c: Context<AuthContext>) {
         })
         .eq("id", matchId);
     }
+
+    // --- Live Score Calculation & Logging (same as recordPoint) ---
+    const tA_ids = [
+      Number(metadata.team_a_pos.right_player_id),
+      Number(metadata.team_a_pos.left_player_id)
+    ];
+    const tB_ids = [
+      Number(metadata.team_b_pos.right_player_id),
+      Number(metadata.team_b_pos.left_player_id)
+    ];
+    const allIds = [...tA_ids, ...tB_ids];
+
+    const { data: ratingData } = await supabase
+      .from('ratings')
+      .select('player_id, aura_mu, aura_sigma')
+      .in('player_id', allIds);
+
+    const getStat = (id: number) => {
+      const r = ratingData?.find(x => x.player_id === id);
+      return { 
+        id, 
+        mu: r?.aura_mu ?? 25.0, 
+        sigma: r?.aura_sigma ?? 8.33 
+      };
+    };
+
+    const teamA_stats = tA_ids.map(getStat);
+    const teamB_stats = tB_ids.map(getStat);
+
+    const muA = (teamA_stats[0].mu + teamA_stats[1].mu) / 2;
+    const sigmaA = Math.sqrt((Math.pow(teamA_stats[0].sigma, 2) + Math.pow(teamA_stats[1].sigma, 2)) / 2);
+    const muB = (teamB_stats[0].mu + teamB_stats[1].mu) / 2;
+    const sigmaB = Math.sqrt((Math.pow(teamB_stats[0].sigma, 2) + Math.pow(teamB_stats[1].sigma, 2)) / 2);
+
+    const p_blend = blended_point_prob(
+      muA, sigmaA, muB, sigmaB,
+      scoreA, scoreB, POINTS_TO_WIN
+    );
+
+    const win_prob_A = match_prob_with_beta_uncertainty(
+      p_blend, scoreA, scoreB, POINTS_TO_WIN
+    );
+
+    console.log(`[Match ${matchId}] Undo: ${scoreA}-${scoreB}. Win Prob Team A: ${(win_prob_A * 100).toFixed(1)}%`);
+
+    // Broadcast updated score after undo with win probability
+    broadcastMatchScore(matchId, scoreA, scoreB, Number((win_prob_A * 100).toFixed(1)));
 
     return c.json({
       data: {

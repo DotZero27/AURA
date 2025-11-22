@@ -13,6 +13,8 @@ import type {
   removeTournamentRefereeSchema,
 } from "@/utils/validation";
 import { getTournamentRounds as parseRoundsFromMetadata } from "@/utils/rounds";
+import { POINTS_TO_WIN, type ScoreMetadata } from "@/lib/scoring";
+import { blended_point_prob, match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
 
 // GET /tournaments - Get all tournaments with filtering
 export async function getAllTournaments(c: Context<AuthContext>) {
@@ -237,21 +239,63 @@ export async function getTournamentById(c: Context<AuthContext>) {
       .eq("id", tournament.host_id)
       .single();
 
-    // Check if player is registered and get registration count
-    const { data: registration } = await supabase
+    // Get registered players with their details
+    const { data: registrations } = await supabase
       .from("registrations")
-      .select("player_id")
-      .eq("tournament_id", tournament.id)
-      .eq("player_id", playerId)
-      .single();
-
-    const registered = !!registration;
-
-    // Get total registration count
-    const { count: registeredCount } = await supabase
-      .from("registrations")
-      .select("*", { count: "exact", head: true })
+      .select(
+        `
+        player_id,
+        players!inner (
+          id,
+          username,
+          photo_url
+        )
+      `
+      )
       .eq("tournament_id", tournament.id);
+
+    // Check if player is registered
+    const registered = registrations?.some((r: any) => {
+      const player = Array.isArray(r.players) ? r.players[0] : r.players;
+      return player?.id === playerId;
+    }) || false;
+
+    // Get total registration count from registrations array length
+    const registeredCount = registrations?.length || 0;
+
+    // Get player IDs
+    const playerIds =
+      registrations
+        ?.map((r: any) => {
+          const player = Array.isArray(r.players) ? r.players[0] : r.players;
+          return player?.id;
+        })
+        .filter((id: any) => id != null) || [];
+
+    // Get ratings for registered players (only if there are players)
+    let ratingsMap = new Map();
+    if (playerIds.length > 0) {
+      const { data: ratings } = await supabase
+        .from("ratings")
+        .select("player_id, aura_mu")
+        .in("player_id", playerIds);
+
+      ratingsMap = new Map(
+        ratings?.map((r: any) => [r.player_id, r.aura_mu]) || []
+      );
+    }
+
+    // Format registered players
+    const registeredPlayers = (registrations || []).map((r: any) => {
+      const player = Array.isArray(r.players) ? r.players[0] : r.players;
+      return {
+        id: player?.id,
+        username: player?.username,
+        name: player?.username,
+        photo_url: player?.photo_url,
+        aura: ratingsMap.get(player?.id) || null,
+      };
+    });
 
     // Calculate eligibility
     const matchFormat = Array.isArray(tournament.match_format)
@@ -300,6 +344,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
       data: {
         id: tournament.id,
         name: tournament.name,
+        description: tournament.description || "",
         venue: {
           name: venue?.name || "",
           address: venue?.address || "",
@@ -326,6 +371,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
             }
           : null,
         referee: refereeDetails,
+        registered_players: registeredPlayers,
       },
     });
   } catch (error) {
@@ -845,17 +891,77 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: scoresError.message });
     }
 
-    // Get ratings
+    // Get latest score with metadata for win probability calculation
+    const { data: latestScore } = await supabase
+      .from("scores")
+      .select("team_a_score, team_b_score, metadata")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    // Get ratings (need both mu and sigma for win probability calculation)
     const playerIds =
       teamMembers?.map((tm: any) => tm.player_id).filter(Boolean) || [];
     const { data: ratings } = await supabase
       .from("ratings")
-      .select("player_id, aura_mu")
+      .select("player_id, aura_mu, aura_sigma")
       .in("player_id", playerIds);
 
     const ratingsMap = new Map(
       ratings?.map((r: any) => [r.player_id, r.aura_mu]) || []
     );
+
+    // Calculate win probability if match has started (has scores with metadata)
+    let win_prob_A: number | null = null;
+    if (latestScore && latestScore.metadata) {
+      const metadata = latestScore.metadata as ScoreMetadata;
+      const scoreA = latestScore.team_a_score || 0;
+      const scoreB = latestScore.team_b_score || 0;
+
+      // Get player IDs from metadata positions
+      const tA_ids = [
+        Number(metadata.team_a_pos.right_player_id),
+        Number(metadata.team_a_pos.left_player_id)
+      ];
+      const tB_ids = [
+        Number(metadata.team_b_pos.right_player_id),
+        Number(metadata.team_b_pos.left_player_id)
+      ];
+      const allIds = [...tA_ids, ...tB_ids];
+
+      // Get rating data for all players
+      const { data: ratingData } = await supabase
+        .from('ratings')
+        .select('player_id, aura_mu, aura_sigma')
+        .in('player_id', allIds);
+
+      const getStat = (id: number) => {
+        const r = ratingData?.find((x: any) => x.player_id === id);
+        return { 
+          id, 
+          mu: r?.aura_mu ?? 25.0, 
+          sigma: r?.aura_sigma ?? 8.33 
+        };
+      };
+
+      const teamA_stats = tA_ids.map(getStat);
+      const teamB_stats = tB_ids.map(getStat);
+
+      const muA = (teamA_stats[0].mu + teamA_stats[1].mu) / 2;
+      const sigmaA = Math.sqrt((Math.pow(teamA_stats[0].sigma, 2) + Math.pow(teamA_stats[1].sigma, 2)) / 2);
+      const muB = (teamB_stats[0].mu + teamB_stats[1].mu) / 2;
+      const sigmaB = Math.sqrt((Math.pow(teamB_stats[0].sigma, 2) + Math.pow(teamB_stats[1].sigma, 2)) / 2);
+
+      const p_blend = blended_point_prob(
+        muA, sigmaA, muB, sigmaB,
+        scoreA, scoreB, POINTS_TO_WIN
+      );
+
+      win_prob_A = match_prob_with_beta_uncertainty(
+        p_blend, scoreA, scoreB, POINTS_TO_WIN
+      );
+    }
 
     // Build players array with team assignments
     // Get the pairing for this match (typically one pairing per match)
@@ -912,8 +1018,10 @@ export async function getMatchDetails(c: Context<AuthContext>) {
         tournament_name: tournament.name,
         round: match.round,
         status: match.status,
+        winner_team_id: match.winner_team_id,
         court: court?.court_number || null,
         win_rate: winRate,
+        win_prob_A: win_prob_A !== null ? Number((win_prob_A * 100).toFixed(1)) : null,
         match_format: {
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
@@ -994,6 +1102,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       status,
       court_id,
       round,
+      winner_team_id,
       courts (
         court_number
       )
@@ -1126,6 +1235,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
         tournament_name: tournament.name,
         round: match.round,
         status: match.status,
+        winner_team_id: match.winner_team_id,
         court: court?.court_number || null,
         match_format: {
           max_age: matchFormat?.max_age || null,
@@ -1486,6 +1596,202 @@ export async function getHostedTournaments(c: Context<AuthContext>) {
       `
       )
       .eq("host_id", playerId)
+      .order("start_time", { ascending: false });
+
+    if (error) {
+      throw new HTTPException(500, { message: error.message });
+    }
+
+    // Format tournaments with registration count
+    const formatted =
+      tournaments?.map((t: any) => {
+        const venue = Array.isArray(t.venue) ? t.venue[0] : t.venue;
+        const matchFormat = Array.isArray(t.match_format)
+          ? t.match_format[0]
+          : t.match_format;
+        const registrations = Array.isArray(t.registrations)
+          ? t.registrations
+          : [];
+
+        return {
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          image_url: t.image_url,
+          start_date: t.start_time,
+          end_date: t.end_time,
+          capacity: t.capacity,
+          registration_fee: t.registration_fee || 0,
+          registered_count: registrations.length,
+          venue: {
+            name: venue?.name || "",
+            address: venue?.address || "",
+          },
+          match_format: {
+            max_age: matchFormat?.max_age || null,
+            eligible_gender: matchFormat?.eligible_gender || "MW",
+          },
+        };
+      }) || [];
+
+    return c.json({ data: { tournaments: formatted } });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/referee - Get tournaments where current player is a referee
+export async function getRefereeTournaments(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+
+    // Get tournament IDs where user is referee
+    const { data: refereeTournaments, error: refereeError } = await supabase
+      .from("tournaments_referee")
+      .select("tournament_id")
+      .eq("player_id", playerId);
+
+    if (refereeError) {
+      throw new HTTPException(500, { message: refereeError.message });
+    }
+
+    const tournamentIds =
+      refereeTournaments?.map((r: any) => r.tournament_id) || [];
+
+    if (tournamentIds.length === 0) {
+      return c.json({ data: { tournaments: [] } });
+    }
+
+    // Get tournament details
+    const { data: tournaments, error } = await supabase
+      .from("tournaments")
+      .select(
+        `
+        id,
+        name,
+        description,
+        image_url,
+        start_time,
+        end_time,
+        capacity,
+        registration_fee,
+        venue:venue (
+          id,
+          name,
+          address
+        ),
+        match_format:match_format (
+          id,
+          max_age,
+          eligible_gender
+        ),
+        registrations (
+          id
+        )
+      `
+      )
+      .in("id", tournamentIds)
+      .order("start_time", { ascending: false });
+
+    if (error) {
+      throw new HTTPException(500, { message: error.message });
+    }
+
+    // Format tournaments with registration count
+    const formatted =
+      tournaments?.map((t: any) => {
+        const venue = Array.isArray(t.venue) ? t.venue[0] : t.venue;
+        const matchFormat = Array.isArray(t.match_format)
+          ? t.match_format[0]
+          : t.match_format;
+        const registrations = Array.isArray(t.registrations)
+          ? t.registrations
+          : [];
+
+        return {
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          image_url: t.image_url,
+          start_date: t.start_time,
+          end_date: t.end_time,
+          capacity: t.capacity,
+          registration_fee: t.registration_fee || 0,
+          registered_count: registrations.length,
+          venue: {
+            name: venue?.name || "",
+            address: venue?.address || "",
+          },
+          match_format: {
+            max_age: matchFormat?.max_age || null,
+            eligible_gender: matchFormat?.eligible_gender || "MW",
+          },
+        };
+      }) || [];
+
+    return c.json({ data: { tournaments: formatted } });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/registered - Get tournaments where current player is registered
+export async function getRegisteredTournaments(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+
+    // Get tournament IDs where user is registered
+    const { data: registrations, error: registrationError } = await supabase
+      .from("registrations")
+      .select("tournament_id")
+      .eq("player_id", playerId);
+
+    if (registrationError) {
+      throw new HTTPException(500, { message: registrationError.message });
+    }
+
+    const tournamentIds =
+      registrations?.map((r: any) => r.tournament_id) || [];
+
+    if (tournamentIds.length === 0) {
+      return c.json({ data: { tournaments: [] } });
+    }
+
+    // Get tournament details
+    const { data: tournaments, error } = await supabase
+      .from("tournaments")
+      .select(
+        `
+        id,
+        name,
+        description,
+        image_url,
+        start_time,
+        end_time,
+        capacity,
+        registration_fee,
+        venue:venue (
+          id,
+          name,
+          address
+        ),
+        match_format:match_format (
+          id,
+          max_age,
+          eligible_gender
+        ),
+        registrations (
+          id
+        )
+      `
+      )
+      .in("id", tournamentIds)
       .order("start_time", { ascending: false });
 
     if (error) {

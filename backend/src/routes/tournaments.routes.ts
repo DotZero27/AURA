@@ -22,6 +22,8 @@ import {
   getRefereeMatchDetails,
   createTournament,
   getHostedTournaments,
+  getRefereeTournaments,
+  getRegisteredTournaments,
   addTournamentReferee,
   removeTournamentReferee,
 } from "@/controllers/tournaments.controller";
@@ -46,6 +48,20 @@ tournamentsRoutes.get(
   "/hosted",
   authMiddleware,
   getHostedTournaments
+);
+
+// GET /tournaments/referee - Get tournaments where current player is a referee
+tournamentsRoutes.get(
+  "/referee",
+  authMiddleware,
+  getRefereeTournaments
+);
+
+// GET /tournaments/registered - Get tournaments where current player is registered
+tournamentsRoutes.get(
+  "/registered",
+  authMiddleware,
+  getRegisteredTournaments
 );
 
 // GET /tournaments - Get all tournaments with filtering

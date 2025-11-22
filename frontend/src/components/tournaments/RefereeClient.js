@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRefereeMatch } from "@/hooks/useRefereeMatch";
 import { matchesApi } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,8 +21,8 @@ import {
 import AddTeamDialog from "@/components/tournaments/AddTeamDialog";
 import ScoreDrawer from "@/components/tournaments/ScoreDrawer";
 import { faker } from "@faker-js/faker";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { createWebSocketConnection } from "@/lib/websocket";
 
 export default function RefereeClient() {
   const params = useParams();
@@ -44,6 +44,12 @@ export default function RefereeClient() {
   // Check if match is already started (safe to call even if matchData is null)
   const matchStatus = matchData?.status;
   const isMatchStarted = matchStatus === "in_progress" || matchStatus === "completed";
+  const isMatchCompleted = matchStatus === "completed";
+  
+  // Track match completion state (can be updated via websocket)
+  const [matchEnded, setMatchEnded] = useState(isMatchCompleted);
+  const [winnerTeamId, setWinnerTeamId] = useState(matchData?.winner_team_id || null);
+  const wsConnectionRef = useRef(null);
 
   // Fetch match state to get current positions (must be before conditional returns)
   const { data: matchState } = useQuery({
@@ -147,6 +153,52 @@ export default function RefereeClient() {
     },
   });
 
+  // Update matchEnded state when matchData status changes
+  useEffect(() => {
+    if (matchData?.status === "completed") {
+      setMatchEnded(true);
+      setWinnerTeamId(matchData?.winner_team_id || null);
+    }
+  }, [matchData?.status, matchData?.winner_team_id]);
+
+  // Connect to WebSocket to listen for match_end events
+  useEffect(() => {
+    if (!params.match || !isMatchStarted) return;
+
+    const matchId = params.match;
+    const ws = createWebSocketConnection(`/ws/match/${matchId}/score`, {
+      onOpen: (event, wsInstance) => {
+        console.log("WebSocket connected for referee match", matchId);
+      },
+      onClose: () => {
+        console.log("WebSocket disconnected for referee match", matchId);
+      },
+      onError: (error) => {
+        console.error("WebSocket error:", error);
+      },
+      onMessage: (data) => {
+        if (data.type === "match_end") {
+          setMatchEnded(true);
+          setWinnerTeamId(data.winnerTeamId || null);
+          toast.success("Match completed!");
+          // Invalidate queries to get updated match data with winner
+          queryClient.invalidateQueries({
+            queryKey: ["referee-match", params.id, params.round, params.match],
+          });
+        }
+      },
+      reconnect: true,
+    });
+
+    wsConnectionRef.current = ws;
+
+    return () => {
+      if (wsConnectionRef.current) {
+        wsConnectionRef.current.close();
+      }
+    };
+  }, [params.match, isMatchStarted]);
+
   // Load positions from metadata when match state is available (must be before conditional returns)
   useEffect(() => {
     // Only load positions if match is started and positions exist in metadata
@@ -196,15 +248,28 @@ export default function RefereeClient() {
       ?.filter((p) => p.team_id === teamIds[1])
       .map((p) => ({ ...p, photo_url: faker.image.avatarGitHub() })) || [];
 
-  const currentScore = scores ? `${scores.teamA} - ${scores.teamB}` : "0 - 0";
+  // Get serving team information from match state
+  const servingTeamId = matchState?.serving_team_id;
+  const serverSequence = matchState?.server_sequence;
+  
   const teamAScore = scores?.teamA || 0;
   const teamBScore = scores?.teamB || 0;
   const teamAId = teamIds[0] ? String(teamIds[0]) : null;
   const teamBId = teamIds[1] ? String(teamIds[1]) : null;
-
-  // Get serving team information from match state
-  const servingTeamId = matchState?.serving_team_id;
-  const serverSequence = matchState?.server_sequence;
+  
+  // Get winner team information
+  const winnerTeamIdFromData = matchData?.winner_team_id || winnerTeamId;
+  const isTeamAWinner = winnerTeamIdFromData && String(winnerTeamIdFromData) === teamAId;
+  const isTeamBWinner = winnerTeamIdFromData && String(winnerTeamIdFromData) === teamBId;
+  
+  // Format score with serverSequence if available (pickleball format: X - Y - Z)
+  const currentScore = scores 
+    ? (serverSequence !== null && serverSequence !== undefined 
+        ? `${scores.teamA} - ${scores.teamB} - ${serverSequence}` 
+        : `${scores.teamA} - ${scores.teamB}`)
+    : (serverSequence !== null && serverSequence !== undefined 
+        ? `0 - 0 - ${serverSequence}` 
+        : "0 - 0");
   const isTeamAServing = servingTeamId && String(servingTeamId) === teamAId;
   const isTeamBServing = servingTeamId && String(servingTeamId) === teamBId;
 
@@ -237,6 +302,10 @@ export default function RefereeClient() {
   };
 
   const handleScoreUpdate = (teamId) => {
+    if (matchEnded) {
+      toast.error("Match has ended. Cannot add more points.");
+      return;
+    }
     const rallyWinnerTeamId = parseInt(teamId);
     if (!rallyWinnerTeamId) {
       toast.error("Invalid team ID");
@@ -408,8 +477,24 @@ export default function RefereeClient() {
           </div>
         </div>
 
+        {/* Match Completed Indicator */}
+        {matchEnded && (
+          <div className="mb-4 flex items-center justify-center">
+            <div className="px-4 py-2 bg-green-100 border-2 border-green-500 rounded-lg">
+              <div className="text-sm font-semibold text-green-800 text-center">
+                🏆 Match Completed
+              </div>
+              {winnerTeamIdFromData && (
+                <div className="text-xs text-green-700 text-center mt-1">
+                  {isTeamAWinner ? "Team A Wins!" : isTeamBWinner ? "Team B Wins!" : "Match Finished"}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Serving Team Indicator */}
-        {isMatchStarted && servingTeamId && (
+        {isMatchStarted && servingTeamId && !matchEnded && (
           <div className="mb-4 flex items-center justify-center gap-2">
             <div className="text-sm text-gray-600">Serving:</div>
             <div
@@ -469,39 +554,63 @@ export default function RefereeClient() {
               isTeamAssigned("left") &&
               isTeamAssigned("right") && (
                 <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
-                  {isTeamAServing && (
-                    <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
-                      SERVING
+                  {matchEnded ? (
+                    // Show winner information when match is completed
+                    <div className="flex flex-col items-center gap-2 px-4">
+                      {isTeamAWinner ? (
+                        <>
+                          <div className="text-white text-lg font-bold bg-yellow-500 px-3 py-1 rounded">
+                            🏆 WINNER
+                          </div>
+                          <div className="text-white text-sm font-semibold text-center">
+                            Team A
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-white text-sm text-center opacity-75">
+                          Team A
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {teamAId ? (
-                    <ScoreDrawer
-                      teamId={teamAId}
-                      teamName="Team A"
-                      currentScore={teamAScore}
-                      onConfirm={handleScoreUpdate}
-                      trigger={
+                  ) : (
+                    <>
+                      {isTeamAServing && (
+                        <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
+                          SERVING
+                        </div>
+                      )}
+                      {teamAId ? (
+                        <ScoreDrawer
+                          teamId={teamAId}
+                          teamName="Team A"
+                          currentScore={teamAScore}
+                          onConfirm={handleScoreUpdate}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={matchEnded}
+                              className={cn(
+                                "text-white bg-[#ABD1C4] rounded-full",
+                                isTeamAServing && "ring-2 ring-blue-500 ring-offset-2",
+                                matchEnded && "opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              <Plus className="size-6 text-gray-800" />
+                            </Button>
+                          }
+                        />
+                      ) : (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={cn(
-                            "text-white bg-[#ABD1C4] rounded-full",
-                            isTeamAServing && "ring-2 ring-blue-500 ring-offset-2"
-                          )}
+                          className="text-white bg-[#ABD1C4] rounded-full"
+                          disabled
                         >
                           <Plus className="size-6 text-gray-800" />
                         </Button>
-                      }
-                    />
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-white bg-[#ABD1C4] rounded-full"
-                      disabled
-                    >
-                      <Plus className="size-6 text-gray-800" />
-                    </Button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -669,39 +778,63 @@ export default function RefereeClient() {
               isTeamAssigned("left") &&
               isTeamAssigned("right") && (
                 <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
-                  {isTeamBServing && (
-                    <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
-                      SERVING
+                  {matchEnded ? (
+                    // Show winner information when match is completed
+                    <div className="flex flex-col items-center gap-2 px-4">
+                      {isTeamBWinner ? (
+                        <>
+                          <div className="text-white text-lg font-bold bg-yellow-500 px-3 py-1 rounded">
+                            🏆 WINNER
+                          </div>
+                          <div className="text-white text-sm font-semibold text-center">
+                            Team B
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-white text-sm text-center opacity-75">
+                          Team B
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {teamBId ? (
-                    <ScoreDrawer
-                      teamId={teamBId}
-                      teamName="Team B"
-                      currentScore={teamBScore}
-                      onConfirm={handleScoreUpdate}
-                      trigger={
+                  ) : (
+                    <>
+                      {isTeamBServing && (
+                        <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
+                          SERVING
+                        </div>
+                      )}
+                      {teamBId ? (
+                        <ScoreDrawer
+                          teamId={teamBId}
+                          teamName="Team B"
+                          currentScore={teamBScore}
+                          onConfirm={handleScoreUpdate}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={matchEnded}
+                              className={cn(
+                                "text-white bg-[#ABD1C4] rounded-full",
+                                isTeamBServing && "ring-2 ring-blue-500 ring-offset-2",
+                                matchEnded && "opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              <Plus className="size-6 text-gray-800" />
+                            </Button>
+                          }
+                        />
+                      ) : (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={cn(
-                            "text-white bg-[#ABD1C4] rounded-full",
-                            isTeamBServing && "ring-2 ring-blue-500 ring-offset-2"
-                          )}
+                          className="text-white bg-[#ABD1C4] rounded-full"
+                          disabled
                         >
                           <Plus className="size-6 text-gray-800" />
                         </Button>
-                      }
-                    />
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-white bg-[#ABD1C4] rounded-full"
-                      disabled
-                    >
-                      <Plus className="size-6 text-gray-800" />
-                    </Button>
+                      )}
+                    </>
                   )}
                 </div>
               )}

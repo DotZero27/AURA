@@ -10,8 +10,5 @@
     "build:frontend": "cd frontend && bun run build",
     "start:frontend": "cd frontend && bun run start",
     "start:backend": "cd backend && bun run start"
-  },
-  "dependencies": {
-    "@tanstack/react-form": "^1.25.0"
   }
 }
