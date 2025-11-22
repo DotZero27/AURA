@@ -816,7 +816,13 @@ export async function recordPoint(c: Context<AuthContext>) {
           end_time: new Date().toISOString(),
         })
         .eq("id", matchId);
+
+      // Update AURA of players
+      // ...
     }
+
+    // Live Score Calculation and Send Websocket event to frontend
+    // ...
 
     return c.json({
       data: {
