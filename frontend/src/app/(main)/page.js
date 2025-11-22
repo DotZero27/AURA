@@ -1,20 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTournaments } from "@/hooks/useTournaments";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Menu, Users } from "lucide-react";
+import { Search, Menu, Users, Activity } from "lucide-react";
 import { ScrollablePage, ScrollablePageHeader, ScrollablePageContent } from "@/components/layout/ScrollablePage";
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({});
+  const [showLiveOnly, setShowLiveOnly] = useState(false);
 
   const { data: tournamentsData, isLoading, error } = useTournaments(filters);
 
-  const tournaments = tournamentsData?.tournaments || [];
+  const allTournaments = tournamentsData?.tournaments || [];
+
+  // Helper function to check if tournament is live
+  const isTournamentLive = (tournament) => {
+    if (!tournament.start_date || !tournament.end_date) return false;
+    const now = new Date();
+    const startTime = new Date(tournament.start_date);
+    const endTime = new Date(tournament.end_date);
+    return now >= startTime && now <= endTime;
+  };
+
+  // Filter tournaments based on live filter and search query
+  const tournaments = useMemo(() => {
+    let filtered = allTournaments;
+
+    // Apply live filter
+    if (showLiveOnly) {
+      filtered = filtered.filter(isTournamentLive);
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((tournament) =>
+        tournament.name?.toLowerCase().includes(query) ||
+        tournament.venue?.name?.toLowerCase().includes(query) ||
+        tournament.venue?.address?.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [allTournaments, showLiveOnly, searchQuery]);
 
   const handleFilterClick = (gender) => {
     setFilters((prev) => ({
@@ -28,8 +60,7 @@ export default function HomePage() {
       <ScrollablePageHeader className="mb-4">
         {/* Header */}
         <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
-          <div className="flex items-center justify-between px-4 py-3">
-            <Menu className="size-6 text-gray-700" />
+          <div className="flex items-center justify-center px-4 py-3">
             <h1 className="text-lg font-bold">Tournaments</h1>
             <div className="w-6" /> {/* Spacer */}
           </div>
@@ -69,6 +100,14 @@ export default function HomePage() {
             >
               <Users className="size-4 mr-1" />
               WD
+            </Button>
+            <Button
+              variant={showLiveOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowLiveOnly(!showLiveOnly)}
+            >
+              <Activity className="size-4 mr-1" />
+              Live
             </Button>
           </div>
         </div>

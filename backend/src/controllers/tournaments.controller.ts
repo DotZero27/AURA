@@ -1113,7 +1113,9 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       .eq("round", round)
       .single();
 
+
     if (matchError || !match) {
+      console.error(matchError);
       throw new HTTPException(404, { message: "Match not found" });
     }
 
@@ -1124,6 +1126,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       .eq("match_id", matchId);
 
     if (pairingsError) {
+      console.error(pairingsError);
       throw new HTTPException(500, { message: pairingsError.message });
     }
 
@@ -1412,6 +1415,7 @@ export async function getCurrentRoundMatches(c: Context<AuthContext>) {
         court_id,
         round,
         refree_id,
+        winner_team_id,
         start_time,
         end_time,
         courts (
@@ -1469,9 +1473,15 @@ export async function getCurrentRoundMatches(c: Context<AuthContext>) {
             return {
               id: player?.id,
               username: player?.username,
+              team_id: teamId,
             };
           }) || [];
       });
+
+      // Get winner players if match is completed
+      const winnerPlayers = match.winner_team_id
+        ? players.filter((p: any) => p.team_id === match.winner_team_id)
+        : [];
 
       return {
         id: match.id,
@@ -1479,9 +1489,11 @@ export async function getCurrentRoundMatches(c: Context<AuthContext>) {
         court: match.courts?.court_number || null,
         round: match.round,
         referee_id: match.refree_id,
+        winner_team_id: match.winner_team_id,
         start_time: match.start_time,
         end_time: match.end_time,
         players,
+        winner_players: winnerPlayers,
       };
     }) || [];
 

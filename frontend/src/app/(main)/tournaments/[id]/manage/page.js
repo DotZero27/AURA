@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -203,85 +205,99 @@ export default function TournamentManagePage() {
         </header>
       </ScrollablePageHeader>
 
-      <ScrollablePageContent className="p-4 space-y-4">
+      <ScrollablePageContent className="space-y-6">
         {/* Tournament Info */}
-        <div>
+        <div className="px-4 pt-4">
           <h2 className="text-2xl font-bold mb-2">{tournament.name}</h2>
-          <p className="text-gray-600 text-sm">{tournament.description}</p>
+          {tournament.description && (
+            <p className="text-gray-600 text-sm leading-relaxed">
+              {tournament.description}
+            </p>
+          )}
         </div>
 
         {/* Round Status Section */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <Clock className="size-5" />
-              Round Status
-            </h3>
-            {roundStatus?.canStartNextRound && (
-              <Button
-                onClick={() => generateRoundMutation.mutate()}
-                disabled={generateRoundMutation.isPending}
-                size="sm"
-              >
-                <Play className="size-4 mr-2" />
-                {generateRoundMutation.isPending
-                  ? "Starting..."
-                  : roundStatus?.currentRound === null
-                  ? "Start First Round"
-                  : `Start Round ${roundStatus?.nextRound}`}
-              </Button>
-            )}
-          </div>
-          {isLoadingRoundStatus ? (
-            <p className="text-gray-500 text-sm">Loading round status...</p>
-          ) : (
-            <div className="space-y-2">
-              {roundStatus?.currentRound === null ? (
-                <p className="text-gray-600">
-                  No rounds have started yet. Click the button above to start the
-                  first round.
-                </p>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Current Round:</span>
-                    <span className="font-semibold">
-                      Round {roundStatus?.currentRound}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Status:</span>
-                    <span
-                      className={`font-semibold ${
-                        roundStatus?.isCurrentRoundComplete
-                          ? "text-green-600"
-                          : "text-orange-600"
-                      }`}
-                    >
-                      {roundStatus?.isCurrentRoundComplete
-                        ? "Complete"
-                        : "In Progress"}
-                    </span>
-                  </div>
-                  {roundStatus?.isCurrentRoundComplete && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Next Round:</span>
-                      <span className="font-semibold">
-                        Round {roundStatus?.nextRound}
-                      </span>
-                    </div>
-                  )}
-                </>
+        <div className="px-4">
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Clock className="size-5 text-gray-600" />
+                Round Status
+              </h3>
+              {roundStatus?.canStartNextRound && (
+                <Button
+                  onClick={() => generateRoundMutation.mutate()}
+                  disabled={generateRoundMutation.isPending}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Play className="size-4" />
+                  {generateRoundMutation.isPending
+                    ? "Starting..."
+                    : roundStatus?.currentRound === null
+                    ? "Start First Round"
+                    : `Start Round ${roundStatus?.nextRound}`}
+                </Button>
               )}
             </div>
-          )}
-        </Card>
+            {isLoadingRoundStatus ? (
+              <p className="text-gray-500 text-sm">Loading round status...</p>
+            ) : (
+              <div className="space-y-3">
+                {roundStatus?.currentRound === null ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-600 text-sm">
+                      No rounds have started yet. Click the button above to start
+                      the first round.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">Current Round</span>
+                      <Badge variant="outline" className="font-semibold">
+                        Round {roundStatus?.currentRound}
+                      </Badge>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-600">Status</span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          roundStatus?.isCurrentRoundComplete
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-orange-50 text-orange-700 border-orange-200"
+                        }
+                      >
+                        {roundStatus?.isCurrentRoundComplete
+                          ? "Complete"
+                          : "In Progress"}
+                      </Badge>
+                    </div>
+                    {roundStatus?.isCurrentRoundComplete && (
+                      <>
+                        <Separator />
+                        <div className="flex items-center justify-between py-2">
+                          <span className="text-sm text-gray-600">Next Round</span>
+                          <Badge variant="outline" className="font-semibold">
+                            Round {roundStatus?.nextRound}
+                          </Badge>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
 
         {/* Referees Section */}
-        <div>
+        <div className="px-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-lg flex items-center gap-2">
-              <Users className="size-5" />
+              <Users className="size-5 text-gray-600" />
               Referees
             </h3>
             <Dialog
@@ -289,8 +305,8 @@ export default function TournamentManagePage() {
               onOpenChange={setIsSearchDialogOpen}
             >
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                  <UserPlus className="size-4 mr-2" />
+                <Button size="sm" variant="outline" className="gap-2">
+                  <UserPlus className="size-4" />
                   Add Referee
                 </Button>
               </DialogTrigger>
@@ -322,7 +338,7 @@ export default function TournamentManagePage() {
                         {searchResults.players.map((player) => (
                           <Card
                             key={player.id}
-                            className="p-3 cursor-pointer hover:bg-gray-50"
+                            className="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
                             onClick={() => {
                               setSelectedPlayer(player);
                               addRefereeMutation.mutate(player.id);
@@ -330,21 +346,16 @@ export default function TournamentManagePage() {
                           >
                             <div className="flex items-center gap-3">
                               {player.photo_url ? (
-                                // <img
-                                //   src={player.photo_url}
-                                //   alt={player.username}
-                                //   className="size-10 rounded-full"
-                                // />
-                                <div
-                                  className="size-10 rounded-full bg-gray-200 flex items-center justify-center"
-                                />
+                                <div className="size-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0" />
                               ) : (
-                                <div className="size-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <div className="size-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                                   <Users className="size-5 text-gray-400" />
                                 </div>
                               )}
                               <div className="flex-1">
-                                <p className="font-medium">{player.username}</p>
+                                <p className="font-medium text-sm">
+                                  {player.username}
+                                </p>
                               </div>
                             </div>
                           </Card>
@@ -376,8 +387,13 @@ export default function TournamentManagePage() {
           </div>
 
           {referees.length === 0 ? (
-            <Card className="p-4 text-center text-gray-500">
-              No referees added yet
+            <Card className="p-6 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="size-12 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Users className="size-6 text-gray-400" />
+                </div>
+                <p className="text-sm text-gray-500">No referees added yet</p>
+              </div>
             </Card>
           ) : (
             <div className="space-y-2">
@@ -385,14 +401,14 @@ export default function TournamentManagePage() {
                 <Card key={index} className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        <Users className="size-5 text-gray-400" />
+                      <div className="size-12 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                        <Users className="size-6 text-gray-400" />
                       </div>
                       <div>
-                        <p className="font-medium">
+                        <p className="font-medium text-sm">
                           {referee.name || "Unknown"}
                         </p>
-                        <p className="text-sm text-gray-600">Referee</p>
+                        <p className="text-xs text-gray-500">Referee</p>
                       </div>
                     </div>
                     <Button
@@ -408,6 +424,7 @@ export default function TournamentManagePage() {
                         }
                       }}
                       disabled={removeRefereeMutation.isPending}
+                      className="text-gray-400 hover:text-red-600"
                     >
                       <X className="size-5" />
                     </Button>
@@ -420,62 +437,124 @@ export default function TournamentManagePage() {
 
         {/* Current Round Matches Section */}
         {roundStatus?.currentRound && (
-          <div>
+          <div className="px-4 pb-4">
             <h3 className="font-bold text-lg flex items-center gap-2 mb-3">
-              <Trophy className="size-5" />
+              <Trophy className="size-5 text-gray-600" />
               Round {roundStatus?.currentRound} Matches
             </h3>
             {isLoadingMatches ? (
-              <Card className="p-4 text-center text-gray-500">
-                Loading matches...
+              <Card className="p-6 text-center">
+                <p className="text-sm text-gray-500">Loading matches...</p>
               </Card>
             ) : currentRoundMatches?.matches?.length === 0 ? (
-              <Card className="p-4 text-center text-gray-500">
-                No matches found for this round
+              <Card className="p-6 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <Trophy className="size-8 text-gray-400" />
+                  <p className="text-sm text-gray-500">
+                    No matches found for this round
+                  </p>
+                </div>
               </Card>
             ) : (
               <div className="space-y-3">
                 {currentRoundMatches?.matches?.map((match) => (
                   <Card key={match.id} className="p-4">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold">Match {match.id}</p>
+                          <p className="font-semibold text-sm">Match {match.id}</p>
                           {match.court && (
-                            <p className="text-sm text-gray-600">
+                            <p className="text-xs text-gray-500 mt-0.5">
                               Court {match.court}
                             </p>
                           )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-600">Status</p>
-                          <p className="font-medium capitalize">
-                            {match.status}
-                          </p>
-                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`capitalize ${
+                            match.status === "completed"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : match.status === "in_progress"
+                              ? "bg-orange-50 text-orange-700 border-orange-200"
+                              : "bg-gray-50 text-gray-700 border-gray-200"
+                          }`}
+                        >
+                          {match.status?.replace("_", " ") || "pending"}
+                        </Badge>
                       </div>
 
                       {/* Players */}
                       {match.players && match.players.length > 0 && (
-                        <div>
-                          <p className="text-sm text-gray-600 mb-1">Players:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {match.players.map((player, idx) => (
-                              <span
-                                key={idx}
-                                className="text-sm bg-gray-100 px-2 py-1 rounded"
-                              >
-                                {player.username}
-                              </span>
-                            ))}
+                        <>
+                          <Separator />
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2 font-medium">
+                              Players
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {match.players.map((player, idx) => {
+                                const isWinner = match.winner_players?.some(
+                                  (wp) => wp.id === player.id
+                                );
+                                return (
+                                  <Badge
+                                    key={idx}
+                                    variant="outline"
+                                    className={`text-xs ${
+                                      isWinner
+                                        ? "bg-yellow-50 text-yellow-700 border-yellow-300 font-semibold"
+                                        : "bg-gray-50"
+                                    }`}
+                                  >
+                                    {player.username}
+                                    {isWinner && (
+                                      <Trophy className="size-3 ml-1" />
+                                    )}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
+                        </>
                       )}
 
+                      {/* Winner Display */}
+                      {match.status === "completed" &&
+                        match.winner_players &&
+                        match.winner_players.length > 0 && (
+                          <>
+                            <Separator />
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                              <div className="flex items-center gap-2">
+                                <Trophy className="size-4 text-yellow-600" />
+                                <div>
+                                  <p className="text-xs text-yellow-700 font-medium mb-1">
+                                    Winner
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {match.winner_players.map((winner, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="text-sm font-semibold text-yellow-800"
+                                      >
+                                        {winner.username}
+                                        {idx < match.winner_players.length - 1 && (
+                                          <span className="mx-1">&</span>
+                                        )}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
                       {/* Referee Assignment */}
+                      <Separator />
                       <div>
-                        <label className="text-sm text-gray-600 mb-1 block">
-                          Assign Referee:
+                        <label className="text-xs text-gray-500 mb-2 block font-medium">
+                          Assign Referee
                         </label>
                         <select
                           value={match.referee_id || ""}
@@ -489,7 +568,7 @@ export default function TournamentManagePage() {
                             });
                           }}
                           disabled={assignRefereeMutation.isPending}
-                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         >
                           <option value="">No Referee</option>
                           {referees.map((referee) => (

@@ -318,7 +318,7 @@ export default function MatchDetailsPage() {
                     whileHover={{ scale: 1.1, boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)" }}
                     transition={{ duration: 0.2 }}
                   >
-                    {player.aura || "5.0"}
+                    {player.aura.toFixed(1) || "5.0"}
                   </motion.div>
                 </div>
                 <motion.p
@@ -401,7 +401,7 @@ export default function MatchDetailsPage() {
                     whileHover={{ scale: 1.1, boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)" }}
                     transition={{ duration: 0.2 }}
                   >
-                    {player.aura || "5.0"}
+                    {player.aura.toFixed(1) || "5.0"}
                   </motion.div>
                 </div>
                 <motion.p

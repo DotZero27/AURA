@@ -27,8 +27,20 @@ export function TournamentCard({ tournament, index }) {
     match_format,
   } = tournament;
 
+  // Helper function to check if tournament is live
+  const isTournamentLive = () => {
+    if (!start_date || !end_date) return false;
+    const now = new Date();
+    const startTime = new Date(start_date);
+    const endTime = new Date(end_date);
+    return now >= startTime && now <= endTime;
+  };
+
   // Determine registration status
   const getStatusBadge = () => {
+    if (isTournamentLive()) {
+      return <Badge className="bg-red-100 text-red-700 animate-pulse">LIVE</Badge>;
+    }
     if (registered) {
       return <Badge className="bg-green-100 text-green-700">REGISTERED</Badge>;
     }

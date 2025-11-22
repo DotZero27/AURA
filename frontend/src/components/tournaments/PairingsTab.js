@@ -2,6 +2,8 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { createWebSocketConnection } from "@/lib/websocket";
 
 // Format player name with dot (e.g., "Hugh . Saturation")
 function formatPlayerName(player) {
@@ -13,26 +15,31 @@ function formatPlayerName(player) {
   return name;
 }
 
-// Format scores for display
-function formatScores(pairing) {
-  if (!pairing.scores) return null;
-  const { teamA, teamB } = pairing.scores;
+// Format scores for display - show only latest score
+function formatScores(pairing, realtimeScores = null) {
+  // Use realtime scores if available, otherwise use pairing scores
+  const scores = realtimeScores || pairing.scores;
+  if (!scores) return null;
+  
+  const { teamA, teamB } = scores;
 
-  // Convert scores to arrays for multi-set display
-  const formatScore = (score) => {
-    if (score === null || score === undefined || score === "") return [];
+  // Get the latest score (single value, not array)
+  const getLatestScore = (score) => {
+    if (score === null || score === undefined || score === "") return null;
     if (Array.isArray(score)) {
-      return score.filter(
+      // Get the last non-null score from array
+      const validScores = score.filter(
         (s) => s !== null && s !== undefined && s !== ""
       );
+      return validScores.length > 0 ? validScores[validScores.length - 1] : null;
     }
-    // For single score value, show it twice to match the design pattern
-    return [score, score];
+    // Single score value
+    return score;
   };
 
   return {
-    teamA: formatScore(teamA),
-    teamB: formatScore(teamB),
+    teamA: getLatestScore(teamA),
+    teamB: getLatestScore(teamB),
   };
 }
 
@@ -79,17 +86,105 @@ function PairingsSkeleton() {
 }
 
 export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
+  // State to store real-time scores for each match
+  const [realtimeScores, setRealtimeScores] = useState({});
+  const wsConnectionsRef = useRef({});
+
+  // Flatten pairingsByCourt into a single array of pairings with court info
+  const allPairings = useMemo(() => {
+    return Object.entries(pairingsByCourt).flatMap(([court, courtPairings]) =>
+      courtPairings.map((pairing) => ({
+        ...pairing,
+        court: court,
+      }))
+    );
+  }, [pairingsByCourt]);
+
+  // Get match IDs for dependency tracking
+  const matchIds = useMemo(() => {
+    return allPairings.map(p => p.match_id || p.id).filter(Boolean).sort().join(',');
+  }, [allPairings]);
+
+  // Set up WebSocket connections for all matches
+  useEffect(() => {
+    if (isLoading || allPairings.length === 0) {
+      // Clear scores when loading or no pairings
+      setRealtimeScores({});
+      return;
+    }
+
+    // Clean up existing connections
+    Object.values(wsConnectionsRef.current).forEach((ws) => {
+      if (ws && ws.close) ws.close();
+    });
+    wsConnectionsRef.current = {};
+    // Clear previous scores when round changes
+    setRealtimeScores({});
+
+    // Create WebSocket connection for each match
+    allPairings.forEach((pairing) => {
+      const matchId = pairing.match_id || pairing.id;
+      if (!matchId) return;
+
+      const ws = createWebSocketConnection(`/ws/match/${matchId}/score`, {
+        onOpen: (event, wsInstance) => {
+          console.log(`WebSocket connected for match ${matchId}`);
+          // Initialize with current score from pairing
+          if (pairing.scores) {
+            const { teamA, teamB } = pairing.scores;
+            const latestTeamA = Array.isArray(teamA) 
+              ? teamA[teamA.length - 1] 
+              : teamA;
+            const latestTeamB = Array.isArray(teamB) 
+              ? teamB[teamB.length - 1] 
+              : teamB;
+            
+            if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+              wsInstance.send(
+                JSON.stringify({
+                  type: "init",
+                  teamA: latestTeamA || 0,
+                  teamB: latestTeamB || 0,
+                })
+              );
+            }
+          }
+        },
+        onClose: () => {
+          console.log(`WebSocket disconnected for match ${matchId}`);
+        },
+        onError: (error) => {
+          console.error(`WebSocket error for match ${matchId}:`, error);
+        },
+        onMessage: (data) => {
+          if (data.type === "score_update") {
+            setRealtimeScores((prev) => ({
+              ...prev,
+              [matchId]: {
+                teamA: data.teamA,
+                teamB: data.teamB,
+              },
+            }));
+          }
+        },
+        reconnect: true,
+      });
+
+      wsConnectionsRef.current[matchId] = ws;
+    });
+
+    // Cleanup on unmount or when pairings change
+    return () => {
+      Object.values(wsConnectionsRef.current).forEach((ws) => {
+        if (ws && ws.close) ws.close();
+      });
+      wsConnectionsRef.current = {};
+    };
+  }, [matchIds, isLoading]);
+
   if (isLoading) {
     return <PairingsSkeleton />;
   }
-
-  // Flatten pairingsByCourt into a single array of pairings with court info
-  const allPairings = Object.entries(pairingsByCourt).flatMap(([court, courtPairings]) =>
-    courtPairings.map((pairing) => ({
-      ...pairing,
-      court: court,
-    }))
-  );
 
   if (allPairings.length === 0) {
     return (
@@ -115,10 +210,12 @@ export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
           pairing.players?.filter((p) => p.team === "A") || [];
         const teamB =
           pairing.players?.filter((p) => p.team === "B") || [];
-        const scores = formatScores(pairing);
+        const matchId = pairing.match_id || pairing.id;
+        const realtimeScore = realtimeScores[matchId];
+        const scores = formatScores(pairing, realtimeScore);
         const hasTeamB = teamB.length > 0;
-        const isLive = pairing.status === "live";
-        const isComplete = pairing.status === "complete";
+        const isLive = pairing.status === "live" || pairing.status === "in_progress";
+        const isComplete = pairing.status === "complete" || pairing.status === "completed";
 
         return (
           <div key={pairing.id} className="bg-white rounded-lg border">
@@ -148,11 +245,9 @@ export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
                       {teamA.map((p) => formatPlayerName(p)).join(" & ")}
                     </span>
                   </div>
-                  {scores && scores.teamA.length > 0 && (
-                    <div className="flex flex-col gap-0.5 text-sm font-medium">
-                      {scores.teamA.map((score, idx) => (
-                        <span key={idx}>{score}</span>
-                      ))}
+                  {scores && scores.teamA !== null && scores.teamA !== undefined && (
+                    <div className="text-sm font-semibold text-purple-600">
+                      {scores.teamA}
                     </div>
                   )}
                 </div>
@@ -166,11 +261,9 @@ export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
                       {teamB.map((p) => formatPlayerName(p)).join(" & ")}
                     </span>
                   </div>
-                  {scores && scores.teamB.length > 0 && (
-                    <div className="flex flex-col gap-0.5 text-sm font-medium">
-                      {scores.teamB.map((score, idx) => (
-                        <span key={idx}>{score}</span>
-                      ))}
+                  {scores && scores.teamB !== null && scores.teamB !== undefined && (
+                    <div className="text-sm font-semibold text-purple-600">
+                      {scores.teamB}
                     </div>
                   )}
                 </div>
