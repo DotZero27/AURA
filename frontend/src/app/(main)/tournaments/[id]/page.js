@@ -74,6 +74,7 @@ export default function TournamentDetailsPage() {
     capacity,
     match_format,
     registration_fee,
+    registered_count,
   } = tournament;
 
   const category =
@@ -83,8 +84,8 @@ export default function TournamentDetailsPage() {
       ? "Women's Doubles"
       : "Mixed Doubles";
 
-  const registeredCount = 15; // This should come from backend
-  const progress = (registeredCount / capacity) * 100;
+  const registeredCount = registered_count || 0;
+  const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
 
   return (
     <ScrollablePage>

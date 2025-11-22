@@ -110,6 +110,7 @@ export async function getAllTournaments(c: Context<AuthContext>) {
         const registered = registrations.some(
           (r: any) => r.player_id === playerId
         );
+        const registered_count = registrations.length;
 
         // Get venue data (handle both object and array formats)
         const venue = Array.isArray(t.venue) ? t.venue[0] : t.venue;
@@ -124,6 +125,7 @@ export async function getAllTournaments(c: Context<AuthContext>) {
           },
           registration_fee: t.registration_fee || 0,
           registered,
+          registered_count,
           image_url: t.image_url,
           start_date: t.start_time,
           end_date: t.end_time,
@@ -235,7 +237,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
       .eq("id", tournament.host_id)
       .single();
 
-    // Check if player is registered
+    // Check if player is registered and get registration count
     const { data: registration } = await supabase
       .from("registrations")
       .select("player_id")
@@ -244,6 +246,12 @@ export async function getTournamentById(c: Context<AuthContext>) {
       .single();
 
     const registered = !!registration;
+
+    // Get total registration count
+    const { count: registeredCount } = await supabase
+      .from("registrations")
+      .select("*", { count: "exact", head: true })
+      .eq("tournament_id", tournament.id);
 
     // Calculate eligibility
     const matchFormat = Array.isArray(tournament.match_format)
@@ -299,6 +307,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
         },
         registration_fee: tournament.registration_fee || 0,
         registered,
+        registered_count: registeredCount || 0,
         image_url: tournament.image_url,
         start_date: tournament.start_time,
         end_date: tournament.end_time,
