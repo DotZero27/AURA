@@ -1,11 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/useUser";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { Plus } from "lucide-react";
+import { ScrollablePage, ScrollablePageHeader, ScrollablePageContent } from "@/components/layout/ScrollablePage";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { data: userData, isLoading } = useUser();
 
   if (isLoading) {
@@ -24,13 +29,24 @@ export default function ProfilePage() {
   const pastTournaments = tournaments?.filter((t) => t.status !== "live") || [];
 
   return (
-    <div className="pb-16">
-      {/* Header */}
-      <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
-        <div className="flex items-center justify-center px-4 py-3">
-          <h1 className="text-lg font-bold">My AURA</h1>
-        </div>
-      </header>
+    <ScrollablePage>
+      <ScrollablePageHeader>
+        <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <h1 className="text-lg font-bold">My AURA</h1>
+            <Button
+              onClick={() => router.push("/tournaments/new")}
+              size="sm"
+              className="gap-2"
+            >
+              <Plus className="size-4" />
+              Create Tournament
+            </Button>
+          </div>
+        </header>
+      </ScrollablePageHeader>
+
+      <ScrollablePageContent>
 
       {/* Profile Section */}
       <div className="flex flex-col items-center py-6">
@@ -194,6 +210,7 @@ export default function ProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+      </ScrollablePageContent>
+    </ScrollablePage>
   );
 }

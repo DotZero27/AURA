@@ -8,8 +8,11 @@ import type {
   tournamentIdSchema,
   tournamentRoundSchema,
   tournamentMatchSchema,
-  refereeMatchUpdateSchema,
+  createTournamentSchema,
+  addTournamentRefereeSchema,
+  removeTournamentRefereeSchema,
 } from "@/utils/validation";
+import { getTournamentRounds as parseRoundsFromMetadata } from "@/utils/rounds";
 
 // GET /tournaments - Get all tournaments with filtering
 export async function getAllTournaments(c: Context<AuthContext>) {
@@ -51,7 +54,6 @@ export async function getAllTournaments(c: Context<AuthContext>) {
       capacity,
       match_format:match_format (
         id,
-        total_rounds,
         max_age,
         eligible_gender
       ),
@@ -127,7 +129,6 @@ export async function getAllTournaments(c: Context<AuthContext>) {
           end_date: t.end_time,
           capacity: t.capacity,
           match_format: {
-            total_rounds: matchFormat?.total_rounds || 0,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -149,8 +150,12 @@ export async function getTournamentById(c: Context<AuthContext>) {
     const playerId = c.get("playerId");
     const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
     const queryParams = ((c.req as any).valid("query") as any) as Partial<z.infer<typeof tournamentQuerySchema>>;
-    const tournamentId = params.id;
+    const tournamentId = parseInt(params.id);
     const mini = queryParams.mini === "true";
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
 
     // Get player info
     const { data: player, error: playerError } = await supabase
@@ -189,7 +194,6 @@ export async function getTournamentById(c: Context<AuthContext>) {
       ),
       match_format:match_format (
         id,
-        total_rounds,
         max_age,
         eligible_gender
       ),
@@ -216,7 +220,6 @@ export async function getTournamentById(c: Context<AuthContext>) {
           id: tournament.id,
           name: tournament.name,
           match_format: {
-            total_rounds: matchFormat?.total_rounds || 0,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -301,7 +304,6 @@ export async function getTournamentById(c: Context<AuthContext>) {
         end_date: tournament.end_time,
         capacity: tournament.capacity,
         match_format: {
-          total_rounds: matchFormat?.total_rounds || 0,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
@@ -329,10 +331,14 @@ export async function getTournamentById(c: Context<AuthContext>) {
 export async function getTournamentRound(c: Context<AuthContext>) {
   try {
     const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentRoundSchema>;
-    const tournamentId = params.id;
+    const tournamentId = parseInt(params.id);
     const round = params.round;
 
-    // Get tournament info
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Get tournament info with metadata
     const { data: tournament, error: tournamentError } = await supabase
       .from("tournaments")
       .select(
@@ -341,9 +347,9 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
-        total_rounds,
         max_age,
-        eligible_gender
+        eligible_gender,
+        metadata
       )
     `
       )
@@ -354,7 +360,21 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       throw new HTTPException(404, { message: "Tournament not found" });
     }
 
-    // Get all matches for this round
+    const tournamentMatchFormat = Array.isArray(tournament.match_format)
+      ? tournament.match_format[0]
+      : tournament.match_format;
+
+    // Validate that the requested round exists in the tournament
+    const roundMetadata = tournamentMatchFormat?.metadata || {};
+    const validRounds = parseRoundsFromMetadata(roundMetadata);
+
+    if (!validRounds.includes(round)) {
+      throw new HTTPException(400, {
+        message: `Invalid round "${round}". Valid rounds are: ${validRounds.join(", ")}`,
+      });
+    }
+
+    // Get all matches for this round (round can be numeric like "1" or string like "SF", "F")
     const { data: matches, error: matchesError } = await supabase
       .from("matches")
       .select(
@@ -363,8 +383,7 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       status,
       court_id,
       round,
-      pairing_id,
-      winner_team,
+      winner_team_id,
       start_time,
       end_time,
       courts (
@@ -382,17 +401,12 @@ export async function getTournamentRound(c: Context<AuthContext>) {
     // Get pairings for these matches
     const matchIds = matches?.map((m: any) => m.id) || [];
     const { data: pairings, error: pairingsError } = await supabase
-      .from("pairing")
+      .from("pairings")
       .select(
         `
       id,
       match_id,
-      team_id,
-      team:team_id (
-        id,
-        name,
-        avg_aura
-      )
+      tournament_id
     `
       )
       .in("match_id", matchIds);
@@ -401,14 +415,34 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: pairingsError.message });
     }
 
-    // Get team players
-    const teamIds = pairings?.map((p: any) => p.team_id).filter(Boolean) || [];
-    const { data: teamPlayers, error: teamPlayersError } = await supabase
-      .from("team_players")
+    // Get pairing teams
+    const pairingIds = pairings?.map((p: any) => p.id) || [];
+    const { data: pairingTeams, error: pairingTeamsError } = await supabase
+      .from("pairing_teams")
+      .select(
+        `
+      pairing_id,
+      team_id,
+      teams (
+        team_id
+      )
+    `
+      )
+      .in("pairing_id", pairingIds);
+
+    if (pairingTeamsError) {
+      throw new HTTPException(500, { message: pairingTeamsError.message });
+    }
+
+    // Get team members
+    const teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+    const { data: teamMembers, error: teamMembersError } = await supabase
+      .from("team_members")
       .select(
         `
       team_id,
       player_id,
+      created_at,
       players (
         id,
         username,
@@ -418,8 +452,8 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       )
       .in("team_id", teamIds);
 
-    if (teamPlayersError) {
-      throw new HTTPException(500, { message: teamPlayersError.message });
+    if (teamMembersError) {
+      throw new HTTPException(500, { message: teamMembersError.message });
     }
 
     // Get scores for matches
@@ -429,8 +463,8 @@ export async function getTournamentRound(c: Context<AuthContext>) {
         `
       id,
       match_id,
-      team_a,
-      team_b,
+      team_a_score,
+      team_b_score,
       created_at
     `
       )
@@ -442,7 +476,7 @@ export async function getTournamentRound(c: Context<AuthContext>) {
 
     // Get ratings for players
     const playerIds =
-      teamPlayers?.map((tp: any) => tp.player_id).filter(Boolean) || [];
+      teamMembers?.map((tm: any) => tm.player_id).filter(Boolean) || [];
     const { data: ratings } = await supabase
       .from("ratings")
       .select("player_id, aura_mu")
@@ -455,35 +489,51 @@ export async function getTournamentRound(c: Context<AuthContext>) {
     // Build pairings structure
     const pairingsMap = new Map();
     matches?.forEach((match: any) => {
-      const matchPairings =
-        pairings?.filter((p: any) => p.match_id === match.id) || [];
-      const teams = matchPairings.map((p: any) => {
-        const team = Array.isArray(p.team) ? p.team[0] : p.team;
-        const players =
-          teamPlayers
-            ?.filter((tp: any) => tp.team_id === p.team_id)
-            .map((tp: any) => {
-              const player = Array.isArray(tp.players)
-                ? tp.players[0]
-                : tp.players;
-              return {
-                id: player?.id,
-                name: player?.username,
-                username: player?.username,
-                photo_url: player?.photo_url,
-                team_id: p.team_id,
-                team: matchPairings.indexOf(p) === 0 ? "A" : "B",
-                aura: ratingsMap.get(player?.id) || null,
-                created_at: null, // Would need to get from team_players.created_at
-              };
-            }) || [];
+      // Get pairing for this match (typically one pairing per match)
+      const matchPairing = pairings?.find((p: any) => p.match_id === match.id);
+      
+      if (!matchPairing) {
+        // No pairing found for this match
+        pairingsMap.set(match.id, {
+          id: match.id,
+          tournament_id: tournamentId,
+          status: match.status,
+          court: null,
+          match_id: match.id,
+          players: [],
+          scores: {
+            teamA: 0,
+            teamB: 0,
+          },
+        });
+        return;
+      }
 
-        return {
-          team_id: p.team_id,
-          team_name: team?.name,
-          players,
-        };
-      });
+      // Get all teams for this pairing (typically 2 teams)
+      const pairingTeamIds = pairingTeams
+        ?.filter((pt: any) => pt.pairing_id === matchPairing.id)
+        .map((pt: any) => pt.team_id) || [];
+      
+      // Build players array with correct team assignments (A/B)
+      const allPlayers = pairingTeamIds.flatMap((teamId: number, teamIndex: number) => {
+        return teamMembers
+          ?.filter((tm: any) => tm.team_id === teamId)
+          .map((tm: any) => {
+            const player = Array.isArray(tm.players)
+              ? tm.players[0]
+              : tm.players;
+            return {
+              id: player?.id,
+              name: player?.username,
+              username: player?.username,
+              photo_url: player?.photo_url,
+              team_id: teamId,
+              team: teamIndex === 0 ? "A" : "B",
+              aura: ratingsMap.get(player?.id) || null,
+              created_at: tm.created_at,
+            };
+          }) || [];
+      }) || [];
 
       const matchScores =
         scores?.filter((s: any) => s.match_id === match.id) || [];
@@ -499,10 +549,10 @@ export async function getTournamentRound(c: Context<AuthContext>) {
         status: match.status,
         court: court?.court_number || null,
         match_id: match.id,
-        players: teams.flatMap((t: any) => t.players),
+        players: allPlayers,
         scores: {
-          teamA: latestScore?.team_a || 0,
-          teamB: latestScore?.team_b || 0,
+          teamA: latestScore?.team_a_score || 0,
+          teamB: latestScore?.team_b_score || 0,
         },
       });
     });
@@ -510,30 +560,25 @@ export async function getTournamentRound(c: Context<AuthContext>) {
     // Build leaderboard (sort by wins)
     const playerWins = new Map();
     matches?.forEach((match: any) => {
-      if (match.winner_team) {
-        const winnerPairing = pairings?.find(
-          (p: any) => p.team_id === match.winner_team
-        );
-        if (winnerPairing) {
-          const winnerPlayers =
-            teamPlayers?.filter(
-              (tp: any) => tp.team_id === winnerPairing.team_id
-            ) || [];
-          winnerPlayers.forEach((tp: any) => {
-            const currentWins = playerWins.get(tp.player_id) || 0;
-            playerWins.set(tp.player_id, currentWins + 1);
-          });
-        }
+      if (match.winner_team_id) {
+        const winnerPlayers =
+          teamMembers?.filter(
+            (tm: any) => tm.team_id === match.winner_team_id
+          ) || [];
+        winnerPlayers.forEach((tm: any) => {
+          const currentWins = playerWins.get(tm.player_id) || 0;
+          playerWins.set(tm.player_id, currentWins + 1);
+        });
       }
     });
 
     const leaderboard = Array.from(playerWins.entries())
       .map(([playerId, wins]) => {
-        const tp = teamPlayers?.find((tp: any) => tp.player_id === playerId);
-        const player = tp
-          ? Array.isArray(tp.players)
-            ? tp.players[0]
-            : tp.players
+        const tm = teamMembers?.find((tm: any) => tm.player_id === playerId);
+        const player = tm
+          ? Array.isArray(tm.players)
+            ? tm.players[0]
+            : tm.players
           : null;
         return {
           id: player?.id,
@@ -546,18 +591,13 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       })
       .sort((a, b) => b.wins - a.wins);
 
-    const matchFormat = Array.isArray(tournament.match_format)
-      ? tournament.match_format[0]
-      : tournament.match_format;
-
     return c.json({
       data: {
         id: tournament.id,
         name: tournament.name,
         match_format: {
-          total_rounds: matchFormat?.total_rounds || 0,
-          max_age: matchFormat?.max_age || null,
-          eligible_gender: matchFormat?.eligible_gender || "MW",
+          max_age: tournamentMatchFormat?.max_age || null,
+          eligible_gender: tournamentMatchFormat?.eligible_gender || "MW",
         },
         round: {
           pairings: Array.from(pairingsMap.values()),
@@ -573,12 +613,68 @@ export async function getTournamentRound(c: Context<AuthContext>) {
   }
 }
 
+// GET /tournaments/:id/rounds - Get tournament rounds from metadata
+export async function getTournamentRounds(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Get tournament with match_format metadata
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select(
+        `
+      id,
+      match_format:match_format (
+        id,
+        metadata
+      )
+    `
+      )
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    const matchFormat = Array.isArray(tournament.match_format)
+      ? tournament.match_format[0]
+      : tournament.match_format;
+
+    // Use utility function to parse rounds from metadata
+    const metadata = matchFormat?.metadata || {};
+    const sortedRounds = parseRoundsFromMetadata(metadata);
+
+    return c.json({
+      data: {
+        tournament_id: tournamentId,
+        rounds: sortedRounds,
+        metadata: metadata,
+      },
+    });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
 // POST /tournaments/:id/join - Join as referee
 export async function joinAsReferee(c: Context<AuthContext>) {
   try {
     const playerId = c.get("playerId");
     const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
-    const tournamentId = params.id;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
 
     // Check if user is already a referee for this tournament
     const { data: existingReferee } = await supabase
@@ -621,9 +717,16 @@ export async function joinAsReferee(c: Context<AuthContext>) {
 export async function getMatchDetails(c: Context<AuthContext>) {
   try {
     const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentMatchSchema>;
-    const tournamentId = params.id;
+    const tournamentId = parseInt(params.id);
     const round = params.round;
-    const matchId = params.match;
+    const matchId = parseInt(params.match);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+    if (isNaN(matchId)) {
+      throw new HTTPException(400, { message: "Invalid match ID" });
+    }
 
     // Get tournament info
     const { data: tournament, error: tournamentError } = await supabase
@@ -634,7 +737,6 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
-        total_rounds,
         max_age,
         eligible_gender
       )
@@ -656,7 +758,7 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       status,
       court_id,
       round,
-      winner_team,
+      winner_team_id,
       start_time,
       end_time,
       courts (
@@ -675,27 +777,29 @@ export async function getMatchDetails(c: Context<AuthContext>) {
 
     // Get pairings
     const { data: pairings, error: pairingsError } = await supabase
-      .from("pairing")
-      .select(
-        `
-      id,
-      team_id,
-      team:team_id (
-        id,
-        name
-      )
-    `
-      )
+      .from("pairings")
+      .select("id, match_id, tournament_id")
       .eq("match_id", matchId);
 
     if (pairingsError) {
       throw new HTTPException(500, { message: pairingsError.message });
     }
 
-    // Get team players
-    const teamIds = pairings?.map((p: any) => p.team_id).filter(Boolean) || [];
-    const { data: teamPlayers, error: teamPlayersError } = await supabase
-      .from("team_players")
+    // Get pairing teams
+    const pairingIds = pairings?.map((p: any) => p.id) || [];
+    const { data: pairingTeams, error: pairingTeamsError } = await supabase
+      .from("pairing_teams")
+      .select("pairing_id, team_id")
+      .in("pairing_id", pairingIds);
+
+    if (pairingTeamsError) {
+      throw new HTTPException(500, { message: pairingTeamsError.message });
+    }
+
+    // Get team members
+    const teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+    const { data: teamMembers, error: teamMembersError } = await supabase
+      .from("team_members")
       .select(
         `
       team_id,
@@ -710,8 +814,8 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       )
       .in("team_id", teamIds);
 
-    if (teamPlayersError) {
-      throw new HTTPException(500, { message: teamPlayersError.message });
+    if (teamMembersError) {
+      throw new HTTPException(500, { message: teamMembersError.message });
     }
 
     // Get all scores for this match
@@ -720,8 +824,8 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       .select(
         `
       id,
-      team_a,
-      team_b,
+      team_a_score,
+      team_b_score,
       created_at
     `
       )
@@ -734,7 +838,7 @@ export async function getMatchDetails(c: Context<AuthContext>) {
 
     // Get ratings
     const playerIds =
-      teamPlayers?.map((tp: any) => tp.player_id).filter(Boolean) || [];
+      teamMembers?.map((tm: any) => tm.player_id).filter(Boolean) || [];
     const { data: ratings } = await supabase
       .from("ratings")
       .select("player_id, aura_mu")
@@ -745,37 +849,43 @@ export async function getMatchDetails(c: Context<AuthContext>) {
     );
 
     // Build players array with team assignments
-    const teams =
-      pairings?.map((p: any, index: number) => {
-        const team = Array.isArray(p.team) ? p.team[0] : p.team;
-        const players =
-          teamPlayers
-            ?.filter((tp: any) => tp.team_id === p.team_id)
-            .map((tp: any) => {
-              const player = Array.isArray(tp.players)
-                ? tp.players[0]
-                : tp.players;
-              return {
-                id: player?.id,
-                name: player?.username,
-                username: player?.username,
-                photo_url: player?.photo_url,
-                team_id: p.team_id,
-                team: index === 0 ? "A" : "B",
-                aura: ratingsMap.get(player?.id) || null,
-                created_at: tp.created_at,
-              };
-            }) || [];
-        return { team_id: p.team_id, players };
+    // Get the pairing for this match (typically one pairing per match)
+    const matchPairing = pairings?.find((p: any) => p.match_id === matchId);
+    
+    let allPlayers: any[] = [];
+    if (matchPairing) {
+      // Get all teams for this pairing (typically 2 teams)
+      const pairingTeamIds = pairingTeams
+        ?.filter((pt: any) => pt.pairing_id === matchPairing.id)
+        .map((pt: any) => pt.team_id) || [];
+      
+      // Build players array with correct team assignments (A/B)
+      allPlayers = pairingTeamIds.flatMap((teamId: number, teamIndex: number) => {
+        return teamMembers
+          ?.filter((tm: any) => tm.team_id === teamId)
+          .map((tm: any) => {
+            const player = Array.isArray(tm.players)
+              ? tm.players[0]
+              : tm.players;
+            return {
+              id: player?.id,
+              name: player?.username,
+              username: player?.username,
+              photo_url: player?.photo_url,
+              team_id: teamId,
+              team: teamIndex === 0 ? "A" : "B",
+              aura: ratingsMap.get(player?.id) || null,
+              created_at: tm.created_at,
+            };
+          }) || [];
       }) || [];
-
-    const allPlayers = teams.flatMap((t: any) => t.players);
+    }
 
     // Calculate win rate for team A
     const teamAScore =
-      scores && scores.length > 0 ? scores[scores.length - 1].team_a : 0;
+      scores && scores.length > 0 ? scores[scores.length - 1].team_a_score : 0;
     const teamBScore =
-      scores && scores.length > 0 ? scores[scores.length - 1].team_b : 0;
+      scores && scores.length > 0 ? scores[scores.length - 1].team_b_score : 0;
     const totalScore = teamAScore + teamBScore;
     const winRate =
       totalScore > 0
@@ -796,15 +906,14 @@ export async function getMatchDetails(c: Context<AuthContext>) {
         court: court?.court_number || null,
         win_rate: winRate,
         match_format: {
-          total_rounds: matchFormat?.total_rounds || 0,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
         scores:
           scores?.map((s: any) => ({
             id: s.id,
-            team_a: s.team_a,
-            team_b: s.team_b,
+            team_a: s.team_a_score,
+            team_b: s.team_b_score,
             created_at: s.created_at,
           })) || [],
         players: allPlayers,
@@ -823,9 +932,16 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
   try {
     const playerId = c.get("playerId");
     const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentMatchSchema>;
-    const tournamentId = params.id;
+    const tournamentId = parseInt(params.id);
     const round = params.round;
-    const matchId = params.match;
+    const matchId = parseInt(params.match);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+    if (isNaN(matchId)) {
+      throw new HTTPException(400, { message: "Invalid match ID" });
+    }
 
     // Verify referee access
     const { data: referee } = await supabase
@@ -848,7 +964,6 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
-        total_rounds,
         max_age,
         eligible_gender
       )
@@ -886,27 +1001,29 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
 
     // Get pairings
     const { data: pairings, error: pairingsError } = await supabase
-      .from("pairing")
-      .select(
-        `
-      id,
-      team_id,
-      team:team_id (
-        id,
-        name
-      )
-    `
-      )
+      .from("pairings")
+      .select("id, match_id, tournament_id")
       .eq("match_id", matchId);
 
     if (pairingsError) {
       throw new HTTPException(500, { message: pairingsError.message });
     }
 
-    // Get team players
-    const teamIds = pairings?.map((p: any) => p.team_id).filter(Boolean) || [];
-    const { data: teamPlayers, error: teamPlayersError } = await supabase
-      .from("team_players")
+    // Get pairing teams
+    const pairingIds = pairings?.map((p: any) => p.id) || [];
+    const { data: pairingTeams, error: pairingTeamsError } = await supabase
+      .from("pairing_teams")
+      .select("pairing_id, team_id")
+      .in("pairing_id", pairingIds);
+
+    if (pairingTeamsError) {
+      throw new HTTPException(500, { message: pairingTeamsError.message });
+    }
+
+    // Get team members
+    const teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+    const { data: teamMembers, error: teamMembersError } = await supabase
+      .from("team_members")
       .select(
         `
       team_id,
@@ -921,18 +1038,19 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       )
       .in("team_id", teamIds);
 
-    if (teamPlayersError) {
-      throw new HTTPException(500, { message: teamPlayersError.message });
+    if (teamMembersError) {
+      throw new HTTPException(500, { message: teamMembersError.message });
     }
 
-    // Get latest score
+    // Get latest score with metadata
     const { data: latestScore, error: scoresError } = await supabase
       .from("scores")
       .select(
         `
       id,
-      team_a,
-      team_b
+      team_a_score,
+      team_b_score,
+      metadata
     `
       )
       .eq("match_id", matchId)
@@ -947,7 +1065,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
 
     // Get ratings
     const playerIds =
-      teamPlayers?.map((tp: any) => tp.player_id).filter(Boolean) || [];
+      teamMembers?.map((tm: any) => tm.player_id).filter(Boolean) || [];
     const { data: ratings } = await supabase
       .from("ratings")
       .select("player_id, aura_mu")
@@ -958,29 +1076,35 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
     );
 
     // Build players array
-    const teams =
-      pairings?.map((p: any, index: number) => {
-        const team = Array.isArray(p.team) ? p.team[0] : p.team;
-        const players =
-          teamPlayers
-            ?.filter((tp: any) => tp.team_id === p.team_id)
-            .map((tp: any) => {
-              const player = Array.isArray(tp.players)
-                ? tp.players[0]
-                : tp.players;
-              return {
-                id: player?.id,
-                name: player?.username,
-                username: player?.username,
-                photo_url: player?.photo_url,
-                team_id: p.team_id,
-                created_at: tp.created_at,
-              };
-            }) || [];
-        return { team_id: p.team_id, players };
+    // Get the pairing for this match (typically one pairing per match)
+    const matchPairing = pairings?.find((p: any) => p.match_id === matchId);
+    
+    let allPlayers: any[] = [];
+    if (matchPairing) {
+      // Get all teams for this pairing (typically 2 teams)
+      const pairingTeamIds = pairingTeams
+        ?.filter((pt: any) => pt.pairing_id === matchPairing.id)
+        .map((pt: any) => pt.team_id) || [];
+      
+      // Build players array
+      allPlayers = pairingTeamIds.flatMap((teamId: number) => {
+        return teamMembers
+          ?.filter((tm: any) => tm.team_id === teamId)
+          .map((tm: any) => {
+            const player = Array.isArray(tm.players)
+              ? tm.players[0]
+              : tm.players;
+            return {
+              id: player?.id,
+              name: player?.username,
+              username: player?.username,
+              photo_url: player?.photo_url,
+              team_id: teamId,
+              created_at: tm.created_at,
+            };
+          }) || [];
       }) || [];
-
-    const allPlayers = teams.flatMap((t: any) => t.players);
+    }
 
     const court = Array.isArray(match.courts) ? match.courts[0] : match.courts;
     const matchFormat = Array.isArray(tournament.match_format)
@@ -995,14 +1119,14 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
         status: match.status,
         court: court?.court_number || null,
         match_format: {
-          total_rounds: matchFormat?.total_rounds || 0,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
         scores: {
-          teamA: latestScore?.team_a || 0,
-          teamB: latestScore?.team_b || 0,
+          teamA: latestScore?.team_a_score || 0,
+          teamB: latestScore?.team_b_score || 0,
         },
+        metadata: latestScore?.metadata || null,
         players: allPlayers,
       },
     });
@@ -1014,155 +1138,526 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
   }
 }
 
-// POST /tournaments/referee/:id/:round/:match - Update match score
-export async function updateRefereeMatchScore(c: Context<AuthContext>) {
+// POST /tournaments - Create a new tournament
+export async function createTournament(c: Context<AuthContext>) {
   try {
     const playerId = c.get("playerId");
-    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentMatchSchema>;
-    const body = ((c.req as any).valid("json") as any) as z.infer<typeof refereeMatchUpdateSchema>;
-    const tournamentId = params.id;
-    const round = params.round;
-    const matchId = params.match;
+    const body = ((c.req as any).valid("json") as any) as z.infer<typeof createTournamentSchema>;
+    console.log(body)
 
-    // Verify referee access
-    const { data: referee } = await supabase
-      .from("tournaments_referee")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .eq("player_id", playerId)
-      .single();
-
-    if (!referee) {
-      throw new HTTPException(403, { message: "Not authorized as referee" });
+    // Validate that end_time is after start_time
+    const startTime = new Date(body.start_time);
+    const endTime = new Date(body.end_time);
+    if (endTime <= startTime) {
+      throw new HTTPException(400, { message: "End time must be after start time" });
     }
 
-    const { newScore, stepback, positions } = body;
+    // Verify venue exists
+    const { data: venue, error: venueError } = await supabase
+      .from("venue")
+      .select("id")
+      .eq("id", body.venue_id)
+      .single();
 
-    // Get current match and scores
-    const { data: match } = await supabase
+    if (venueError || !venue) {
+      throw new HTTPException(404, { message: "Venue not found" });
+    }
+
+    // Auto-generate type based on eligible_gender
+    let matchFormatType: string;
+    switch (body.match_format.eligible_gender) {
+      case "M":
+        matchFormatType = "mens_doubles";
+        break;
+      case "W":
+        matchFormatType = "womens_doubles";
+        break;
+      case "MW":
+        matchFormatType = "mixed_doubles";
+        break;
+      default:
+        throw new HTTPException(400, { message: "Invalid eligible_gender" });
+    }
+
+    // Create match format first
+    const { data: matchFormat, error: matchFormatError } = await supabase
+      .from("match_format")
+      .insert({
+        type: matchFormatType,
+        min_age: body.match_format.min_age || null,
+        max_age: body.match_format.max_age || null,
+        eligible_gender: body.match_format.eligible_gender,
+        metadata: body.match_format.metadata || null,
+      })
+      .select()
+      .single();
+
+    if (matchFormatError || !matchFormat) {
+      throw new HTTPException(500, { message: matchFormatError?.message || "Failed to create match format" });
+    }
+
+    // Create tournament with the newly created match format ID
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .insert({
+        host_id: playerId,
+        name: body.name,
+        description: body.description,
+        venue_id: body.venue_id,
+        match_format_id: matchFormat.id,
+        start_time: body.start_time,
+        end_time: body.end_time,
+        capacity: body.capacity,
+        registration_fee: body.registration_fee || 0,
+        image_url: body.image_url || null,
+        metadata: body.metadata || null,
+      })
+      .select()
+      .single();
+
+    if (tournamentError) {
+      throw new HTTPException(500, { message: tournamentError.message });
+    }
+
+    return c.json({ data: { tournament } }, 201);
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/current-round-matches - Get matches for current round with referee info
+export async function getCurrentRoundMatches(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify user is the host
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("id, host_id")
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    if (tournament.host_id !== playerId) {
+      throw new HTTPException(403, {
+        message: "Only the tournament host can view match management",
+      });
+    }
+
+    // Get round status to find current round
+    const { data: matches } = await supabase
       .from("matches")
-      .select("id")
-      .eq("id", matchId)
-      .single();
+      .select("round")
+      .eq("tournament_id", tournamentId);
 
-    if (!match) {
-      throw new HTTPException(404, { message: "Match not found" });
-    }
-
-    // Get pairings to identify teams
-    const { data: pairings } = await supabase
-      .from("pairing")
-      .select("id, team_id")
-      .eq("match_id", matchId);
-
-    if (!pairings || pairings.length < 2) {
-      throw new HTTPException(400, { message: "Invalid match pairings" });
-    }
-
-    const teamAId = pairings[0].team_id;
-    const teamBId = pairings[1].team_id;
-
-    // Get latest score
-    const { data: latestScore } = await supabase
-      .from("scores")
-      .select("id, team_a, team_b")
-      .eq("match_id", matchId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    let newTeamAScore = latestScore?.team_a || 0;
-    let newTeamBScore = latestScore?.team_b || 0;
-
-    // Handle stepback
-    if (stepback && latestScore) {
-      // Delete the latest score
-      await supabase.from("scores").delete().eq("id", latestScore.id);
-      // Get previous score
-      const { data: previousScore } = await supabase
-        .from("scores")
-        .select("team_a, team_b")
-        .eq("match_id", matchId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      newTeamAScore = previousScore?.team_a || 0;
-      newTeamBScore = previousScore?.team_b || 0;
-    } else {
-      // Update score based on team_id
-      if (newScore === teamAId) {
-        newTeamAScore = (newTeamAScore || 0) + 1;
-      } else if (newScore === teamBId) {
-        newTeamBScore = (newTeamBScore || 0) + 1;
-      } else {
-        throw new HTTPException(400, {
-          message: "Invalid team_id in newScore",
-        });
+    let currentRound = null;
+    if (matches && matches.length > 0) {
+      const rounds = matches.map((m: any) => {
+        const roundNum = parseInt(m.round);
+        return isNaN(roundNum) ? 0 : roundNum;
+      });
+      const maxRound = Math.max(...rounds, 0);
+      if (maxRound > 0) {
+        currentRound = maxRound;
       }
+    }
 
-      // Insert new score
-      const { error: scoreError } = await supabase.from("scores").insert({
-        match_id: matchId,
-        team_a: newTeamAScore,
-        team_b: newTeamBScore,
+    if (!currentRound) {
+      return c.json({
+        data: {
+          round: null,
+          matches: [],
+        },
+      });
+    }
+
+    // Get matches for current round
+    const { data: roundMatches, error: matchesError } = await supabase
+      .from("matches")
+      .select(
+        `
+        id,
+        status,
+        court_id,
+        round,
+        refree_id,
+        start_time,
+        end_time,
+        courts (
+          court_number
+        )
+      `
+      )
+      .eq("tournament_id", tournamentId)
+      .eq("round", currentRound.toString());
+
+    if (matchesError) {
+      throw new HTTPException(500, { message: matchesError.message });
+    }
+
+    // Get pairings and players for these matches
+    const matchIds = roundMatches?.map((m: any) => m.id) || [];
+    const { data: pairings } = await supabase
+      .from("pairings")
+      .select("id, match_id")
+      .in("match_id", matchIds);
+
+    const pairingIds = pairings?.map((p: any) => p.id) || [];
+    const { data: pairingTeams } = await supabase
+      .from("pairing_teams")
+      .select("pairing_id, team_id")
+      .in("pairing_id", pairingIds);
+
+    const teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+    const { data: teamMembers } = await supabase
+      .from("team_members")
+      .select(
+        `
+        team_id,
+        player_id,
+        players (
+          id,
+          username
+        )
+      `
+      )
+      .in("team_id", teamIds);
+
+    // Build match details with players
+    const matchesWithDetails = roundMatches?.map((match: any) => {
+      const matchPairing = pairings?.find((p: any) => p.match_id === match.id);
+      const pairingTeamIds = pairingTeams
+        ?.filter((pt: any) => pt.pairing_id === matchPairing?.id)
+        .map((pt: any) => pt.team_id) || [];
+
+      const players = pairingTeamIds.flatMap((teamId: number) => {
+        return teamMembers
+          ?.filter((tm: any) => tm.team_id === teamId)
+          .map((tm: any) => {
+            const player = Array.isArray(tm.players) ? tm.players[0] : tm.players;
+            return {
+              id: player?.id,
+              username: player?.username,
+            };
+          }) || [];
       });
 
-      if (scoreError) {
-        throw new HTTPException(500, { message: scoreError.message });
-      }
+      return {
+        id: match.id,
+        status: match.status,
+        court: match.courts?.court_number || null,
+        round: match.round,
+        referee_id: match.refree_id,
+        start_time: match.start_time,
+        end_time: match.end_time,
+        players,
+      };
+    }) || [];
+
+    return c.json({
+      data: {
+        round: currentRound,
+        matches: matchesWithDetails,
+      },
+    });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/round-status - Get current round status
+export async function getTournamentRoundStatus(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
     }
 
-    // Handle position updates if provided
-    if (positions) {
-      const { pos1, pos2, pos3, pos4 } = positions;
+    // Get all matches for this tournament
+    const { data: matches, error: matchesError } = await supabase
+      .from("matches")
+      .select("round, status, winner_team_id")
+      .eq("tournament_id", tournamentId);
 
-      // Validate positions - ensure 1,2 are one team and 3,4 are another
-      if (!pos1 || !pos2 || !pos3 || !pos4) {
-        throw new HTTPException(400, {
-          message: "All positions must be provided",
-        });
+    if (matchesError) {
+      throw new HTTPException(500, { message: matchesError.message });
+    }
+
+    let currentRound = null;
+    let nextRound = 1;
+    let isCurrentRoundComplete = true;
+
+    if (matches && matches.length > 0) {
+      // Get all unique rounds and find the maximum
+      const rounds = matches.map((m: any) => {
+        const roundNum = parseInt(m.round);
+        return isNaN(roundNum) ? 0 : roundNum;
+      });
+      const maxRound = Math.max(...rounds, 0);
+
+      if (maxRound > 0) {
+        currentRound = maxRound;
+        nextRound = maxRound + 1;
+
+        // Check if current round is complete
+        const currentRoundMatches = matches.filter(
+          (m: any) => parseInt(m.round) === maxRound
+        );
+        const incompleteMatch = currentRoundMatches.find(
+          (m: any) => m.status !== "completed" || m.winner_team_id === null
+        );
+
+        isCurrentRoundComplete = !incompleteMatch;
       }
-
-      // Get current team assignments
-      const { data: currentTeamPlayers } = await supabase
-        .from("team_players")
-        .select("team_id, player_id")
-        .in("team_id", [teamAId, teamBId]);
-
-      // Validate that positions 1,2 are on the same team and 3,4 are on the same team
-      const pos1Team = currentTeamPlayers?.find(
-        (tp: any) => tp.player_id === pos1
-      )?.team_id;
-      const pos2Team = currentTeamPlayers?.find(
-        (tp: any) => tp.player_id === pos2
-      )?.team_id;
-      const pos3Team = currentTeamPlayers?.find(
-        (tp: any) => tp.player_id === pos3
-      )?.team_id;
-      const pos4Team = currentTeamPlayers?.find(
-        (tp: any) => tp.player_id === pos4
-      )?.team_id;
-
-      if (pos1Team !== pos2Team || pos3Team !== pos4Team) {
-        throw new HTTPException(400, {
-          message: "Positions must not be mixed between teams",
-        });
-      }
-
-      // Update positions if needed (this would require a positions table or metadata)
-      // For now, we'll just validate - actual position updates would need schema changes
     }
 
     return c.json({
       data: {
-        success: true,
-        scores: {
-          teamA: newTeamAScore,
-          teamB: newTeamBScore,
-        },
+        currentRound,
+        nextRound,
+        isCurrentRoundComplete,
+        canStartNextRound: isCurrentRoundComplete || currentRound === null,
       },
     });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/hosted - Get tournaments hosted by current player
+export async function getHostedTournaments(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+
+    const { data: tournaments, error } = await supabase
+      .from("tournaments")
+      .select(
+        `
+        id,
+        name,
+        description,
+        image_url,
+        start_time,
+        end_time,
+        capacity,
+        registration_fee,
+        venue:venue (
+          id,
+          name,
+          address
+        ),
+        match_format:match_format (
+          id,
+          max_age,
+          eligible_gender
+        ),
+        registrations (
+          id
+        )
+      `
+      )
+      .eq("host_id", playerId)
+      .order("start_time", { ascending: false });
+
+    if (error) {
+      throw new HTTPException(500, { message: error.message });
+    }
+
+    // Format tournaments with registration count
+    const formatted =
+      tournaments?.map((t: any) => {
+        const venue = Array.isArray(t.venue) ? t.venue[0] : t.venue;
+        const matchFormat = Array.isArray(t.match_format)
+          ? t.match_format[0]
+          : t.match_format;
+        const registrations = Array.isArray(t.registrations)
+          ? t.registrations
+          : [];
+
+        return {
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          image_url: t.image_url,
+          start_date: t.start_time,
+          end_date: t.end_time,
+          capacity: t.capacity,
+          registration_fee: t.registration_fee || 0,
+          registered_count: registrations.length,
+          venue: {
+            name: venue?.name || "",
+            address: venue?.address || "",
+          },
+          match_format: {
+            max_age: matchFormat?.max_age || null,
+            eligible_gender: matchFormat?.eligible_gender || "MW",
+          },
+        };
+      }) || [];
+
+    return c.json({ data: { tournaments: formatted } });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/referees - Add a referee to a tournament
+export async function addTournamentReferee(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const body = ((c.req as any).valid("json") as any) as z.infer<typeof addTournamentRefereeSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify user is the host
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("id, host_id")
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    if (tournament.host_id !== playerId) {
+      throw new HTTPException(403, {
+        message: "Only the tournament host can add referees",
+      });
+    }
+
+    // Check if referee already exists
+    const { data: existingReferee } = await supabase
+      .from("tournaments_referee")
+      .select("id")
+      .eq("tournament_id", tournamentId)
+      .eq("player_id", body.player_id)
+      .single();
+
+    if (existingReferee) {
+      throw new HTTPException(409, {
+        message: "Player is already a referee for this tournament",
+      });
+    }
+
+    // Verify player exists
+    const { data: player, error: playerError } = await supabase
+      .from("players")
+      .select("id, username")
+      .eq("id", body.player_id)
+      .single();
+
+    if (playerError || !player) {
+      throw new HTTPException(404, { message: "Player not found" });
+    }
+
+    // Add referee
+    const { data: referee, error: insertError } = await supabase
+      .from("tournaments_referee")
+      .insert({
+        tournament_id: tournamentId,
+        player_id: body.player_id,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw new HTTPException(500, { message: insertError.message });
+    }
+
+    return c.json(
+      {
+        data: {
+          id: referee.id,
+          tournament_id: tournamentId,
+          player_id: body.player_id,
+          player: {
+            id: player.id,
+            username: player.username,
+          },
+        },
+      },
+      201
+    );
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// DELETE /tournaments/:id/referees/:playerId - Remove a referee from a tournament
+export async function removeTournamentReferee(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof removeTournamentRefereeSchema> & z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+    const refereePlayerId = parseInt(params.player_id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+    if (isNaN(refereePlayerId)) {
+      throw new HTTPException(400, { message: "Invalid player ID" });
+    }
+
+    // Verify user is the host
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("id, host_id")
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    if (tournament.host_id !== playerId) {
+      throw new HTTPException(403, {
+        message: "Only the tournament host can remove referees",
+      });
+    }
+
+    // Remove referee
+    const { error: deleteError } = await supabase
+      .from("tournaments_referee")
+      .delete()
+      .eq("tournament_id", tournamentId)
+      .eq("player_id", refereePlayerId);
+
+    if (deleteError) {
+      throw new HTTPException(500, { message: deleteError.message });
+    }
+
+    return c.json({ data: { success: true } });
   } catch (error) {
     if (error instanceof HTTPException) {
       throw error;

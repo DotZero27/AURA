@@ -6,19 +6,47 @@ import {
   tournamentIdSchema,
   tournamentRoundSchema,
   tournamentMatchSchema,
-  refereeMatchUpdateSchema,
+  createTournamentSchema,
+  addTournamentRefereeSchema,
+  removeTournamentRefereeSchema,
 } from "@/utils/validation";
 import {
   getAllTournaments,
   getTournamentById,
   getTournamentRound,
+  getTournamentRounds,
+  getTournamentRoundStatus,
+  getCurrentRoundMatches,
   joinAsReferee,
   getMatchDetails,
   getRefereeMatchDetails,
-  updateRefereeMatchScore,
+  createTournament,
+  getHostedTournaments,
+  addTournamentReferee,
+  removeTournamentReferee,
 } from "@/controllers/tournaments.controller";
+import {
+  getTournamentRegistrations,
+  registerForTournament,
+} from "@/controllers/registrations.controller";
+import { createRegistrationSchema } from "@/utils/validation";
 
 export const tournamentsRoutes = new Hono<AuthContext>();
+
+// POST /tournaments - Create a new tournament
+tournamentsRoutes.post(
+  "/",
+  authMiddleware,
+  zValidator("json", createTournamentSchema),
+  createTournament
+);
+
+// GET /tournaments/hosted - Get tournaments hosted by current player
+tournamentsRoutes.get(
+  "/hosted",
+  authMiddleware,
+  getHostedTournaments
+);
 
 // GET /tournaments - Get all tournaments with filtering
 tournamentsRoutes.get(
@@ -35,6 +63,30 @@ tournamentsRoutes.get(
   zValidator("param", tournamentIdSchema),
   zValidator("query", tournamentQuerySchema.partial()),
   getTournamentById
+);
+
+// GET /tournaments/:id/rounds - Get tournament rounds from metadata
+tournamentsRoutes.get(
+  "/:id/rounds",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getTournamentRounds
+);
+
+// GET /tournaments/:id/round-status - Get current round status
+tournamentsRoutes.get(
+  "/:id/round-status",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getTournamentRoundStatus
+);
+
+// GET /tournaments/:id/current-round-matches - Get matches for current round
+tournamentsRoutes.get(
+  "/:id/current-round-matches",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getCurrentRoundMatches
 );
 
 // GET /tournaments/:id/:round - Get tournament round details
@@ -69,11 +121,36 @@ tournamentsRoutes.get(
   getRefereeMatchDetails
 );
 
-// POST /tournaments/referee/:id/:round/:match - Update match score
-tournamentsRoutes.post(
-  "/referee/:id/:round/:match",
+// GET /tournaments/:id/registrations - Get all registrations for a tournament
+tournamentsRoutes.get(
+  "/:id/registrations",
   authMiddleware,
-  zValidator("param", tournamentMatchSchema),
-  zValidator("json", refereeMatchUpdateSchema),
-  updateRefereeMatchScore
+  zValidator("param", tournamentIdSchema),
+  getTournamentRegistrations
+);
+
+// POST /tournaments/:id/register - Register for a tournament
+tournamentsRoutes.post(
+  "/:id/register",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", createRegistrationSchema.partial()),
+  registerForTournament
+);
+
+// POST /tournaments/:id/referees - Add a referee to a tournament
+tournamentsRoutes.post(
+  "/:id/referees",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", addTournamentRefereeSchema),
+  addTournamentReferee
+);
+
+// DELETE /tournaments/:id/referees/:playerId - Remove a referee from a tournament
+tournamentsRoutes.delete(
+  "/:id/referees/:player_id",
+  authMiddleware,
+  zValidator("param", removeTournamentRefereeSchema),
+  removeTournamentReferee
 );

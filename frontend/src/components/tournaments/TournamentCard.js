@@ -43,9 +43,9 @@ export function TournamentCard({ tournament, index }) {
       ? "Women's Doubles"
       : "Mixed Doubles";
 
-  // Calculate registered count (this would come from backend)
-  const registeredCount = 15; // Placeholder
-  const progress = (registeredCount / capacity) * 100;
+  // Calculate registered count (from backend or default to 0)
+  const registeredCount = tournament.registered_count || 0;
+  const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
 
   return (
     <motion.div

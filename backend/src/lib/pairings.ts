@@ -1,7 +1,4 @@
-import { Hono } from 'hono';
 import { supabase } from './supabase';
-
-const app = new Hono();
 
 // --- CONSTANTS ---
 const MAX_ROUNDS = 5;
@@ -573,51 +570,11 @@ async function simulateRoundMatches(tournamentId: number) {
     };
 }
 
-// --- ROUTES ---
-
-app.post('/api/generate-round', async (c) => {
-    const body = await c.req.json();
-    const tournamentId = parseInt(body.tournamentId);
-
-    if (!tournamentId || isNaN(tournamentId)) return c.json({ error: "Valid Tournament ID required" }, 400);
-
-    try {
-        const { nextRound } = await validateTournamentState(tournamentId);
-        const players = await fetchTournamentData(tournamentId);
-        
-        if (players.length < 4) return c.json({ error: "Not enough players" }, 400);
-
-        const history = await buildTeammateHistory(tournamentId);
-        
-        // NOTE: `players` is already deterministically sorted by fetchTournamentData, 
-        // but generatePairingsRecursive will sort it again to be safe.
-        const finalPairings = generatePairingsRecursive([...players], history);
-
-        if (!finalPairings) return c.json({ error: "CRITICAL: No valid pairing configuration found." }, 500);
-
-        const savedMatches = await processAndPersistRound(tournamentId, nextRound, finalPairings);
-
-        return c.json({ success: true, round: nextRound, matches: savedMatches });
-
-    } catch (e: any) {
-        console.error("Round Gen Error:", e);
-        return c.json({ error: e.message }, 500);
-    }
-});
-
-app.post('/api/test/simulate-round', async (c) => {
-    const body = await c.req.json();
-    const tournamentId = parseInt(body.tournamentId);
-
-    try {
-        const results = await simulateRoundMatches(tournamentId);
-        return c.json({ success: true, updated_matches: results });
-    } catch (e: any) {
-        return c.json({ error: e.message }, 500);
-    }
-});
-
-export default {
-    port: 3000,
-    fetch: app.fetch,
+// Export all functions for use in controllers
+export {
+    validateTournamentState,
+    fetchTournamentData,
+    buildTeammateHistory,
+    generatePairingsRecursive,
+    processAndPersistRound,
 };

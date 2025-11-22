@@ -1,19 +1,22 @@
-CREATE TABLE players (
-  id SERIAL PRIMARY KEY,
-  user_id UUID, -- Kept as TEXT as this often comes from external Auth providers (Auth0, Firebase)
-  username VARCHAR,
-  dob DATE,
-  gender VARCHAR,
-  photo_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+create table public.players (
+  id serial not null,
+  user_id uuid not null,
+  username character varying null,
+  dob date null,
+  gender character varying null,
+  photo_url text null,
+  created_at timestamp with time zone null default now(),
+  constraint players_pkey primary key (id),
+  constraint players_user_id_fkey foreign KEY (user_id) references auth.users (id) on update CASCADE
+) TABLESPACE pg_default;
 
 CREATE TABLE venue (
   id SERIAL PRIMARY KEY,
   name VARCHAR,
   address TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
+  updated_at TIMESTAMPTZ,
+  metadata JSONB
 );
 
 CREATE TABLE match_format (

@@ -18,7 +18,7 @@ export function BottomNav() {
   // Alternative nav items for different screens
   const tournamentNavItems = [
     { href: '/', icon: Home, label: 'Tournaments' },
-    { href: '/calendar', icon: Calendar, label: 'Calendar' },
+    { href: '/tournaments/hosted', icon: Calendar, label: 'My Tournaments' },
     { href: '/stats', icon: BarChart3, label: 'Stats' },
     { href: '/profile', icon: User, label: 'Profile' },
   ];
@@ -38,22 +38,28 @@ export function BottomNav() {
     items = tournamentNavItems;
   }
 
+  // Update active state to handle nested routes
+  const isActive = (href) => {
+    if (href === '/') {
+      return pathname === '/';
+    }
+    return pathname?.startsWith(href);
+  };
+
   return (
-    <nav className="border fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-[480px] mx-auto">
+    <nav className="border fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-[500px] mx-auto">
       <div className="flex justify-around items-center h-16">
         {items.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full ${
-                isActive ? 'text-purple-600' : 'text-gray-500'
-              }`}
+              className={cn("flex flex-col items-center justify-center flex-1 h-full text-gray-500", active && 'text-purple-600')}
             >
-              <Icon className={`w-6 h-6 ${isActive ? 'text-purple-600' : ''}`} />
-              <div className={cn("w-8 h-0.5 mt-1", isActive ? 'bg-purple-600' : 'bg-transparent')} />
+              <Icon className={cn("size-6 flex-1", active && 'text-purple-600' )} />
+              <div className={cn("w-full h-1 rounded-full mt-1 bg-transparent", active && 'bg-purple-600')} />
             </Link>
           );
         })}

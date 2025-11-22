@@ -4,19 +4,19 @@ import { supabase } from './supabase';
 const app = new Hono();
 
 // --- CONSTANTS ---
-const POINTS_TO_WIN = 11;
-const WIN_BY = 2;
+export const POINTS_TO_WIN = 11;
+export const WIN_BY = 2;
 
 // --- TYPES ---
 
 // Internal structure to track logical court positions
-interface TeamPositions {
+export interface TeamPositions {
     right_player_id: number; // Even Court
     left_player_id: number;  // Odd Court
 }
 
 // Database Metadata Structure
-interface ScoreMetadata {
+export interface ScoreMetadata {
     team_a_pos: TeamPositions;
     team_b_pos: TeamPositions;
 }
@@ -36,7 +36,7 @@ interface StartMatchPayload {
 // --- HELPERS ---
 
 // Helper: Verify teams and return IDs strictly (A = Lower ID, B = Higher ID)
-async function getMatchContext(matchId: number) {
+export async function getMatchContext(matchId: number) {
     // 1. Get Match Status & Pairing
     const { data: match, error: mErr } = await supabase
         .from('matches')
@@ -334,6 +334,10 @@ app.post('/api/match/undo', async (c) => {
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
+
+        if (!latest) {
+            return c.json({ error: "No score found to undo" }, 404);
+        }
 
         // 3. Delete Latest
         await supabase.from('scores').delete().eq('id', latest.id);

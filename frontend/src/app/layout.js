@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased max-w-[480px] border-r border-l mx-auto`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased overscroll-none`}
       >
         <QueryProvider>
           <AuthProvider>

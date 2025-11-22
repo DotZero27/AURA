@@ -1,9 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTournament } from "@/hooks/useTournament";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { tournamentsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   ArrowLeft,
   MoreVertical,
@@ -15,11 +26,34 @@ import {
   Star,
 } from "lucide-react";
 import { formatTime, formatDateWithDay } from "@/lib/utils";
+import {
+  ScrollablePage,
+  ScrollablePageHeader,
+  ScrollablePageContent,
+} from "@/components/layout/ScrollablePage";
+import { toast } from "sonner";
 
 export default function TournamentDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: tournament, isLoading } = useTournament(params.id);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const registrationMutation = useMutation({
+    mutationFn: () => tournamentsApi.register(params.id),
+    onSuccess: () => {
+      toast.success("Successfully registered for tournament!");
+      setIsDrawerOpen(false);
+      // Invalidate and refetch tournament data to update registration status
+      queryClient.invalidateQueries({ queryKey: ["tournament", params.id] });
+    },
+    onError: (error) => {
+      const errorMessage =
+        error?.response?.data?.message || "Failed to register for tournament";
+      toast.error(errorMessage);
+    },
+  });
 
   if (isLoading) {
     return <div className="p-4 text-center">Loading...</div>;
@@ -39,6 +73,7 @@ export default function TournamentDetailsPage() {
     referee,
     capacity,
     match_format,
+    registration_fee,
   } = tournament;
 
   const category =
@@ -52,21 +87,22 @@ export default function TournamentDetailsPage() {
   const progress = (registeredCount / capacity) * 100;
 
   return (
-    <div className="pb-20">
-      {/* Header */}
-      <header className="sticky top-0 bg-white border-b z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <h1 className="text-lg font-bold">Tournaments</h1>
-          <Button variant="ghost" size="icon">
-            <MoreVertical className="w-5 h-5" />
-          </Button>
-        </div>
-      </header>
+    <ScrollablePage>
+      <ScrollablePageHeader>
+        <header className="sticky top-0 bg-white border-b z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-lg font-bold">Tournaments</h1>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="w-5 h-5" />
+            </Button>
+          </div>
+        </header>
+      </ScrollablePageHeader>
 
-      <div className="space-y-4">
+      <ScrollablePageContent className="space-y-4">
         {/* Image Placeholder */}
         <div className="w-full h-[412px] bg-gray-200 rounded-b-3xl" />
 
@@ -207,18 +243,90 @@ export default function TournamentDetailsPage() {
           </div>
         </div>
 
-        {/* FAQ Section */}
-        <div className="mx-4 mb-4">
-          <h3 className="font-bold text-lg">FAQ&apos;s</h3>
+        {/* Book Now / Show Stats Button */}
+        <div className="sticky bottom-0 border-t bg-white p-4">
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => {
+              const startTime = new Date(start_date);
+              const now = new Date();
+              const isRegistered = tournament?.registered;
+              
+              if (isRegistered || startTime <= now) {
+                router.push(`/tournaments/${params.id}/stats`);
+              } else {
+                setIsDrawerOpen(true);
+              }
+            }}
+            disabled={registrationMutation.isPending}
+          >
+            {tournament?.registered
+              ? "SHOW STATS"
+              : new Date(start_date) <= new Date()
+              ? "SHOW STATS"
+              : "BOOK NOW"}
+          </Button>
         </div>
-      </div>
+      </ScrollablePageContent>
 
-      {/* Book Now Button */}
-      <div className="border fixed bottom-16 left-0 right-0 p-4 bg-white border-t border-gray-200 max-w-[480px] mx-auto">
-        <Button className="w-full" size="lg">
-          BOOK NOW
-        </Button>
-      </div>
-    </div>
+      {/* Registration Confirmation Drawer */}
+      <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Confirm Registration</DrawerTitle>
+            <DrawerDescription>
+              Are you sure you want to register for {name}?
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4 py-2 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Tournament:</span>
+              <span className="font-medium">{name}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Date:</span>
+              <span className="font-medium">
+                {formatDateWithDay(start_date)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Time:</span>
+              <span className="font-medium">
+                {formatTime(start_date)} - {formatTime(end_date)}
+              </span>
+            </div>
+            {registration_fee > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Registration Fee:</span>
+                <span className="font-medium">
+                  ${registration_fee.toFixed(2)}
+                </span>
+              </div>
+            )}
+          </div>
+          <DrawerFooter>
+            <Button
+              onClick={() => registrationMutation.mutate()}
+              disabled={registrationMutation.isPending}
+              className="w-full"
+              size="lg"
+            >
+              {registrationMutation.isPending
+                ? "Registering..."
+                : "Confirm Registration"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDrawerOpen(false)}
+              disabled={registrationMutation.isPending}
+              className="w-full"
+            >
+              Cancel
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </ScrollablePage>
   );
 }

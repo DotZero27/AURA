@@ -53,18 +53,26 @@ export async function getUserDetails(c: Context<AuthContext>) {
     // Get all matches for this player
     // First, get all teams this player is part of
     const { data: playerTeams } = await supabase
-      .from("team_players")
+      .from("team_members")
       .select("team_id")
       .eq("player_id", playerId);
 
     const teamIds = playerTeams?.map((pt: any) => pt.team_id) || [];
 
     if (teamIds.length > 0) {
-      // Get pairings for these teams
-      const { data: pairings } = await supabase
-        .from("pairing")
-        .select("match_id, tournament_id")
+      // Get pairing teams for these teams
+      const { data: pairingTeams } = await supabase
+        .from("pairing_teams")
+        .select("pairing_id")
         .in("team_id", teamIds);
+
+      const pairingIds = pairingTeams?.map((pt: any) => pt.pairing_id) || [];
+
+      // Get pairings for these pairing IDs
+      const { data: pairings } = await supabase
+        .from("pairings")
+        .select("match_id, tournament_id")
+        .in("id", pairingIds);
 
       const matchIds =
         pairings?.map((p: any) => p.match_id).filter(Boolean) || [];
@@ -84,7 +92,7 @@ export async function getUserDetails(c: Context<AuthContext>) {
         status,
         court_id,
         round,
-        winner_team,
+        winner_team_id,
         courts (
           court_number
         )
@@ -102,27 +110,25 @@ export async function getUserDetails(c: Context<AuthContext>) {
         tournaments?.map((t: any) => [t.id, t.name]) || []
       );
 
-      // Get all pairings for these matches to get team info
+      // Get all pairings for these matches
       const { data: allPairings } = await supabase
-        .from("pairing")
-        .select(
-          `
-        id,
-        match_id,
-        team_id,
-        team:team_id (
-          id,
-          name
-        )
-      `
-        )
+        .from("pairings")
+        .select("id, match_id")
         .in("match_id", matchIds);
 
-      // Get all team players for these teams
+      const allPairingIds = allPairings?.map((p: any) => p.id) || [];
+
+      // Get all pairing teams
+      const { data: allPairingTeams } = await supabase
+        .from("pairing_teams")
+        .select("pairing_id, team_id")
+        .in("pairing_id", allPairingIds);
+
+      // Get all team members for these teams
       const allTeamIds =
-        allPairings?.map((p: any) => p.team_id).filter(Boolean) || [];
-      const { data: allTeamPlayers } = await supabase
-        .from("team_players")
+        allPairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+      const { data: allTeamMembers } = await supabase
+        .from("team_members")
         .select(
           `
         team_id,
@@ -144,8 +150,8 @@ export async function getUserDetails(c: Context<AuthContext>) {
           `
         id,
         match_id,
-        team_a,
-        team_b,
+        team_a_score,
+        team_b_score,
         created_at
       `
         )
@@ -160,28 +166,35 @@ export async function getUserDetails(c: Context<AuthContext>) {
             allScores?.filter((s: any) => s.match_id === match.id) || [];
           const latestScore = matchScores[matchScores.length - 1] || null;
 
+          // Get pairing teams for this match
+          const matchPairingIds = matchPairings.map((p: any) => p.id);
+          const matchPairingTeams = allPairingTeams?.filter((pt: any) =>
+            matchPairingIds.includes(pt.pairing_id)
+          ) || [];
+
           // Get teams for this match
-          const teams =
-            matchPairings.map((p: any, index: number) => {
-              const team = Array.isArray(p.team) ? p.team[0] : p.team;
-              const players =
-                allTeamPlayers
-                  ?.filter((tp: any) => tp.team_id === p.team_id)
-                  .map((tp: any) => {
-                    const player = Array.isArray(tp.players)
-                      ? tp.players[0]
-                      : tp.players;
-                    return {
-                      id: player?.id,
-                      name: player?.username,
-                      username: player?.username,
-                      team_id: p.team_id,
-                      team: index === 0 ? "A" : "B",
-                      created_at: tp.created_at,
-                    };
-                  }) || [];
-              return { team_id: p.team_id, players };
-            }) || [];
+          const uniqueTeamIds = Array.from(
+            new Set(matchPairingTeams.map((pt: any) => pt.team_id))
+          );
+          const teams = uniqueTeamIds.map((teamId: number, index: number) => {
+            const players =
+              allTeamMembers
+                ?.filter((tm: any) => tm.team_id === teamId)
+                .map((tm: any) => {
+                  const player = Array.isArray(tm.players)
+                    ? tm.players[0]
+                    : tm.players;
+                  return {
+                    id: player?.id,
+                    name: player?.username,
+                    username: player?.username,
+                    team_id: teamId,
+                    team: index === 0 ? "A" : "B",
+                    created_at: tm.created_at,
+                  };
+                }) || [];
+            return { team_id: teamId, players };
+          });
 
           const allPlayers = teams.flatMap((t: any) => t.players);
           const court = Array.isArray(match.courts)
@@ -195,8 +208,8 @@ export async function getUserDetails(c: Context<AuthContext>) {
             status: match.status,
             court: court?.court_number || null,
             scores: {
-              teamA: latestScore?.team_a || 0,
-              teamB: latestScore?.team_b || 0,
+              teamA: latestScore?.team_a_score || 0,
+              teamB: latestScore?.team_b_score || 0,
             },
             players: allPlayers,
           };
