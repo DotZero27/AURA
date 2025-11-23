@@ -346,6 +346,17 @@ export default function TournamentManagePage() {
                         </div>
                       </>
                     )}
+                    {roundStatus?.isCurrentRoundComplete && !roundStatus?.nextRound && (
+                      <>
+                        <Separator />
+                        <div className="flex items-center justify-between py-2">
+                          <span className="text-sm text-gray-600">Tournament Status</span>
+                          <Badge variant="outline" className="font-semibold bg-green-50 text-green-700 border-green-200">
+                            Complete
+                          </Badge>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>

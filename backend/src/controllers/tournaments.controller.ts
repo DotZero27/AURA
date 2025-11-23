@@ -1637,7 +1637,7 @@ export async function getTournamentRoundStatus(c: Context<AuthContext>) {
         currentRound,
         nextRound,
         isCurrentRoundComplete,
-        canStartNextRound: isCurrentRoundComplete || currentRound === null,
+        canStartNextRound: (isCurrentRoundComplete || currentRound === null) && nextRound !== null,
       },
     });
   } catch (error) {

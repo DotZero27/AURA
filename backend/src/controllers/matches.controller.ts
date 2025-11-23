@@ -331,7 +331,7 @@ export async function createMatch(c: Context<AuthContext>) {
       .insert({
         tournament_id: body.tournament_id,
         refree_id: body.referee_id || null,
-        court_id: body.court_id || null,
+        court_id: body.court_id || 1 || null,
         round: body.round,
         status: body.status || "scheduled",
         start_time: body.start_time || null,

@@ -54,6 +54,8 @@ export default function TournamentStatsPage() {
   const pairings = roundData?.round?.pairings || [];
   const leaderboard = roundData?.round?.leaderboard || [];
 
+  console.log(leaderboard);
+
   // Group pairings by court
   const pairingsByCourt = pairings.reduce((acc, pairing) => {
     const court = pairing.court || "Unknown";

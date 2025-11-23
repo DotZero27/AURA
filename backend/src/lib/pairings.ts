@@ -123,9 +123,12 @@ async function validateTournamentState(tournamentId: number) {
         }
     }
 
-    // Check if tournament is complete
+    // Check if tournament is complete (no more rounds after final)
     if (nextRoundIndex >= validRounds.length) {
-        throw new Error(`Tournament Complete. All ${validRounds.length} rounds finished.`);
+        const lastRound = validRounds[validRounds.length - 1];
+        throw new Error(
+            `Tournament Complete. The final round (${lastRound}) has been completed. No more rounds can be generated.`
+        );
     }
 
     const nextRound = validRounds[nextRoundIndex];
