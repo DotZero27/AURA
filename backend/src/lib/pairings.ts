@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
+import { getTournamentRounds } from '../utils/rounds';
 
 // --- CONSTANTS ---
-const MAX_ROUNDS = 5;
 const WIN_POINTS = 1.0;
 const LOSS_POINTS = 0.0;
 const POINT_SCALE_FACTOR = 100;
@@ -53,6 +53,36 @@ function deterministicSort(players: Player[]): Player[] {
  * 1. VALIDATION
  */
 async function validateTournamentState(tournamentId: number) {
+    // Get tournament metadata to determine valid rounds
+    const { data: tournament, error: tournamentError } = await supabase
+        .from('tournaments')
+        .select(`
+            id,
+            match_format:match_format (
+                id,
+                metadata
+            )
+        `)
+        .eq('id', tournamentId)
+        .single();
+
+    if (tournamentError || !tournament) {
+        throw new Error(`Tournament not found: ${tournamentError?.message || 'Unknown error'}`);
+    }
+
+    const matchFormat = Array.isArray(tournament.match_format)
+        ? tournament.match_format[0]
+        : tournament.match_format;
+
+    // Get valid rounds from metadata (sorted)
+    const metadata = matchFormat?.metadata || {};
+    const validRounds = getTournamentRounds(metadata);
+
+    if (validRounds.length === 0) {
+        throw new Error('No valid rounds found in tournament metadata');
+    }
+
+    // Get all matches for this tournament
     const { data: matches, error } = await supabase
         .from('matches')
         .select('round, status, winner_team_id')
@@ -60,31 +90,47 @@ async function validateTournamentState(tournamentId: number) {
 
     if (error) throw new Error(`DB Error: ${error.message}`);
 
-    let maxRound = 0;
+    let currentRound: string | null = null;
+    let nextRoundIndex = 0;
 
-    if (matches && matches.length > 0) {
-        const rounds = matches.map(m => parseInt(m.round) || 0);
-        maxRound = Math.max(...rounds);
+    if (matches && matches.length > 0 && validRounds.length > 0) {
+        // Get all unique rounds that have matches
+        const roundsWithMatches = new Set(
+            matches.map((m: any) => String(m.round))
+        );
 
-        if (maxRound > 0) {
-            const currentRoundMatches = matches.filter(m => parseInt(m.round) === maxRound);
-            const pendingMatch = currentRoundMatches.find(m => 
-                m.status !== 'completed' || m.winner_team_id === null
-            );
+        // Find the current round (last round in validRounds that has matches)
+        for (let i = validRounds.length - 1; i >= 0; i--) {
+            if (roundsWithMatches.has(validRounds[i])) {
+                currentRound = validRounds[i];
+                nextRoundIndex = i + 1;
 
-            if (pendingMatch) {
-                throw new Error(
-                    `Cannot start Round ${maxRound + 1}. Round ${maxRound} is incomplete.`
+                // Check if current round is complete
+                const currentRoundMatches = matches.filter(
+                    (m: any) => String(m.round) === currentRound
                 );
+                const pendingMatch = currentRoundMatches.find(
+                    (m: any) => m.status !== 'completed' || m.winner_team_id === null
+                );
+
+                if (pendingMatch) {
+                    throw new Error(
+                        `Cannot start next round. Round ${currentRound} is incomplete.`
+                    );
+                }
+                break;
             }
         }
     }
 
-    if (maxRound >= MAX_ROUNDS) {
-        throw new Error(`Tournament Complete. ${maxRound}/${MAX_ROUNDS} rounds finished.`);
+    // Check if tournament is complete
+    if (nextRoundIndex >= validRounds.length) {
+        throw new Error(`Tournament Complete. All ${validRounds.length} rounds finished.`);
     }
 
-    return { nextRound: maxRound + 1 };
+    const nextRound = validRounds[nextRoundIndex];
+
+    return { nextRound };
 }
 
 /**
@@ -326,7 +372,7 @@ function generatePairingsRecursive(
 /**
  * 6. PROCESSING & PERSISTENCE
  */
-async function processAndPersistRound(tournamentId: number, roundNum: number, pairings: PairingConfig[]) {
+async function processAndPersistRound(tournamentId: number, roundIdentifier: string, pairings: PairingConfig[]) {
     const outputMatches: any[] = [];
 
     for (const p of pairings) {
@@ -336,7 +382,7 @@ async function processAndPersistRound(tournamentId: number, roundNum: number, pa
             .from('matches')
             .insert({
                 tournament_id: tournamentId,
-                round: roundNum.toString(),
+                round: roundIdentifier,
                 status: 'scheduled',
                 start_time: new Date().toISOString()
             })

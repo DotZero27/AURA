@@ -117,6 +117,11 @@ export const matchesApi = {
   undo: (id) => {
     return apiClient.post(`/matches/${id}/undo`, {});
   },
+
+  // GET /matches/referee - Get matches assigned to current user as referee
+  getRefereeMatches: () => {
+    return apiClient.get("/matches/referee");
+  },
 };
 
 // Pairings API

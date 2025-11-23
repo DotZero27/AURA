@@ -3,8 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/useUser";
+import { useAuth } from "@/contexts/AuthContext";
 import { tournamentsApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
@@ -13,6 +15,7 @@ import { ScrollablePage, ScrollablePageHeader, ScrollablePageContent } from "@/c
 export default function ProfilePage() {
   const router = useRouter();
   const { data: userData, isLoading } = useUser();
+  const { signOut } = useAuth();
   
   // Fetch referee tournaments
   const { data: refereeData, isLoading: isLoadingReferee } = useQuery({
@@ -81,6 +84,14 @@ export default function ProfilePage() {
         <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
           <div className="flex items-center justify-between px-4 py-3">
             <h1 className="text-lg font-bold">My AURA</h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="text-gray-700 hover:text-gray-900"
+            >
+              Logout
+            </Button>
           </div>
         </header>
       </ScrollablePageHeader>

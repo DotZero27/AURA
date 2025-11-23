@@ -9,6 +9,7 @@ import {
   pairingsApi,
   matchesApi,
 } from "@/lib/api";
+import { useUser } from "@/hooks/useUser";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import {
   Play,
   Clock,
   Trophy,
+  ShieldAlert,
 } from "lucide-react";
 import {
   ScrollablePage,
@@ -55,6 +57,8 @@ export default function TournamentManagePage() {
       return response.data.data;
     },
   });
+
+  const { data: userData, isLoading: isLoadingUser } = useUser();
 
   const { data: searchResults, isLoading: isSearching } = useQuery({
     queryKey: ["player-search", searchQuery],
@@ -147,7 +151,7 @@ export default function TournamentManagePage() {
     },
   });
 
-  if (isLoading) {
+  if (isLoading || isLoadingUser) {
     return (
       <ScrollablePage>
         <ScrollablePageHeader>
@@ -189,6 +193,54 @@ export default function TournamentManagePage() {
     );
   }
 
+  // Check if user is the host - restrict access if not
+  const tournamentId = parseInt(params.id);
+  const isHost = userData?.host_for_tournaments?.some(
+    (id) => id === tournamentId || id === params.id
+  ) || false;
+
+  if (!isHost) {
+    return (
+      <ScrollablePage>
+        <ScrollablePageHeader>
+          <header className="sticky top-0 bg-white border-b z-10">
+            <div className="flex items-center justify-between px-4 py-3">
+              <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                <ArrowLeft className="size-5" />
+              </Button>
+              <h1 className="text-lg font-bold">Manage Tournament</h1>
+              <div className="size-10" />
+            </div>
+          </header>
+        </ScrollablePageHeader>
+        <ScrollablePageContent>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+            <Card className="p-8 max-w-md w-full text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="size-16 rounded-full bg-red-100 flex items-center justify-center">
+                  <ShieldAlert className="size-8 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold mb-2">Access Restricted</h2>
+                  <p className="text-gray-600 text-sm">
+                    Only the tournament host can access this page. You don't have permission to manage this tournament.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => router.back()}
+                  className="mt-4"
+                >
+                  Go Back
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </ScrollablePageContent>
+      </ScrollablePage>
+    );
+  }
+
   const referees = tournament.referee || [];
 
   return (
@@ -218,7 +270,7 @@ export default function TournamentManagePage() {
 
         {/* Round Status Section */}
         <div className="px-4">
-          <Card className="p-5">
+          <Card className="p-4 gap-0">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Clock className="size-5 text-gray-600" />
@@ -236,7 +288,11 @@ export default function TournamentManagePage() {
                     ? "Starting..."
                     : roundStatus?.currentRound === null
                     ? "Start First Round"
-                    : `Start Round ${roundStatus?.nextRound}`}
+                    : roundStatus?.nextRound
+                    ? (/^\d+$/.test(roundStatus?.nextRound) 
+                        ? `Start Round ${roundStatus?.nextRound}`
+                        : `Start ${roundStatus?.nextRound}`)
+                    : "Start Next Round"}
                 </Button>
               )}
             </div>
@@ -256,7 +312,9 @@ export default function TournamentManagePage() {
                     <div className="flex items-center justify-between py-2">
                       <span className="text-sm text-gray-600">Current Round</span>
                       <Badge variant="outline" className="font-semibold">
-                        Round {roundStatus?.currentRound}
+                        {/^\d+$/.test(roundStatus?.currentRound) 
+                          ? `Round ${roundStatus?.currentRound}`
+                          : roundStatus?.currentRound || "N/A"}
                       </Badge>
                     </div>
                     <Separator />
@@ -275,13 +333,15 @@ export default function TournamentManagePage() {
                           : "In Progress"}
                       </Badge>
                     </div>
-                    {roundStatus?.isCurrentRoundComplete && (
+                    {roundStatus?.isCurrentRoundComplete && roundStatus?.nextRound && (
                       <>
                         <Separator />
                         <div className="flex items-center justify-between py-2">
                           <span className="text-sm text-gray-600">Next Round</span>
                           <Badge variant="outline" className="font-semibold">
-                            Round {roundStatus?.nextRound}
+                            {/^\d+$/.test(roundStatus?.nextRound) 
+                              ? `Round ${roundStatus?.nextRound}`
+                              : roundStatus?.nextRound}
                           </Badge>
                         </div>
                       </>
@@ -440,7 +500,9 @@ export default function TournamentManagePage() {
           <div className="px-4 pb-4">
             <h3 className="font-bold text-lg flex items-center gap-2 mb-3">
               <Trophy className="size-5 text-gray-600" />
-              Round {roundStatus?.currentRound} Matches
+              {/^\d+$/.test(roundStatus?.currentRound) 
+                ? `Round ${roundStatus?.currentRound} Matches`
+                : `${roundStatus?.currentRound} Matches`}
             </h3>
             {isLoadingMatches ? (
               <Card className="p-6 text-center">

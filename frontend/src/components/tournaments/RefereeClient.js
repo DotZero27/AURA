@@ -581,6 +581,7 @@ export default function RefereeClient() {
                       )}
                       {teamAId ? (
                         <ScoreDrawer
+                          isLoading={recordPointMutation.isPending}
                           teamId={teamAId}
                           teamName="Team A"
                           currentScore={teamAScore}
@@ -805,6 +806,7 @@ export default function RefereeClient() {
                       )}
                       {teamBId ? (
                         <ScoreDrawer
+                          isLoading={recordPointMutation.isPending}
                           teamId={teamBId}
                           teamName="Team B"
                           currentScore={teamBScore}

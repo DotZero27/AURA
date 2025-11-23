@@ -20,12 +20,16 @@ import {
   recordPoint,
   undoMatch,
   getMatchState,
+  getRefereeMatches,
 } from "@/controllers/matches.controller";
 
 export const matchesRoutes = new Hono<AuthContext>();
 
 // GET /matches - Get all matches
 matchesRoutes.get("/", authMiddleware, getAllMatches);
+
+// GET /matches/referee - Get matches assigned to current user as referee
+matchesRoutes.get("/referee", authMiddleware, getRefereeMatches);
 
 // GET /matches/:id - Get match by ID
 matchesRoutes.get(

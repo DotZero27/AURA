@@ -12,7 +12,7 @@ import type {
   addTournamentRefereeSchema,
   removeTournamentRefereeSchema,
 } from "@/utils/validation";
-import { getTournamentRounds as parseRoundsFromMetadata } from "@/utils/rounds";
+import { getTournamentRounds as getSortedRounds, parseRoundsFromMetadata } from "@/utils/rounds";
 import { POINTS_TO_WIN, type ScoreMetadata } from "@/lib/scoring";
 import { blended_point_prob, match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
 
@@ -1378,21 +1378,52 @@ export async function getCurrentRoundMatches(c: Context<AuthContext>) {
       });
     }
 
+    // Get tournament metadata to determine valid rounds
+    const { data: tournamentWithMetadata, error: tournamentMetadataError } = await supabase
+      .from("tournaments")
+      .select(
+        `
+        id,
+        match_format:match_format (
+          id,
+          metadata
+        )
+      `
+      )
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentMetadataError || !tournamentWithMetadata) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    const matchFormat = Array.isArray(tournamentWithMetadata.match_format)
+      ? tournamentWithMetadata.match_format[0]
+      : tournamentWithMetadata.match_format;
+
+    // Get valid rounds from metadata (sorted)
+    const metadata = matchFormat?.metadata || {};
+    const validRounds = getSortedRounds(metadata);
+
     // Get round status to find current round
     const { data: matches } = await supabase
       .from("matches")
       .select("round")
       .eq("tournament_id", tournamentId);
 
-    let currentRound = null;
-    if (matches && matches.length > 0) {
-      const rounds = matches.map((m: any) => {
-        const roundNum = parseInt(m.round);
-        return isNaN(roundNum) ? 0 : roundNum;
-      });
-      const maxRound = Math.max(...rounds, 0);
-      if (maxRound > 0) {
-        currentRound = maxRound;
+    let currentRound: string | null = null;
+    if (matches && matches.length > 0 && validRounds.length > 0) {
+      // Get all unique rounds that have matches
+      const roundsWithMatches = new Set(
+        matches.map((m: any) => String(m.round))
+      );
+
+      // Find the current round (last round in validRounds that has matches)
+      for (let i = validRounds.length - 1; i >= 0; i--) {
+        if (roundsWithMatches.has(validRounds[i])) {
+          currentRound = validRounds[i];
+          break;
+        }
       }
     }
 
@@ -1424,7 +1455,7 @@ export async function getCurrentRoundMatches(c: Context<AuthContext>) {
       `
       )
       .eq("tournament_id", tournamentId)
-      .eq("round", currentRound.toString());
+      .eq("round", currentRound);
 
     if (matchesError) {
       throw new HTTPException(500, { message: matchesError.message });
@@ -1521,6 +1552,33 @@ export async function getTournamentRoundStatus(c: Context<AuthContext>) {
       throw new HTTPException(400, { message: "Invalid tournament ID" });
     }
 
+    // Get tournament metadata to determine valid rounds
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select(
+        `
+        id,
+        match_format:match_format (
+          id,
+          metadata
+        )
+      `
+      )
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    const matchFormat = Array.isArray(tournament.match_format)
+      ? tournament.match_format[0]
+      : tournament.match_format;
+
+    // Get valid rounds from metadata (sorted)
+    const metadata = matchFormat?.metadata || {};
+    const validRounds = getSortedRounds(metadata);
+
     // Get all matches for this tournament
     const { data: matches, error: matchesError } = await supabase
       .from("matches")
@@ -1531,32 +1589,47 @@ export async function getTournamentRoundStatus(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: matchesError.message });
     }
 
-    let currentRound = null;
-    let nextRound = 1;
+    let currentRound: string | null = null;
+    let nextRound: string | null = null;
     let isCurrentRoundComplete = true;
 
-    if (matches && matches.length > 0) {
-      // Get all unique rounds and find the maximum
-      const rounds = matches.map((m: any) => {
-        const roundNum = parseInt(m.round);
-        return isNaN(roundNum) ? 0 : roundNum;
-      });
-      const maxRound = Math.max(...rounds, 0);
+    if (matches && matches.length > 0 && validRounds.length > 0) {
+      // Get all unique rounds that have matches
+      const roundsWithMatches = new Set(
+        matches.map((m: any) => String(m.round))
+      );
 
-      if (maxRound > 0) {
-        currentRound = maxRound;
-        nextRound = maxRound + 1;
+      // Find the current round (last round in validRounds that has matches)
+      let currentRoundIndex = -1;
+      for (let i = validRounds.length - 1; i >= 0; i--) {
+        if (roundsWithMatches.has(validRounds[i])) {
+          currentRound = validRounds[i];
+          currentRoundIndex = i;
+          break;
+        }
+      }
 
+      if (currentRound !== null) {
         // Check if current round is complete
         const currentRoundMatches = matches.filter(
-          (m: any) => parseInt(m.round) === maxRound
+          (m: any) => String(m.round) === currentRound
         );
         const incompleteMatch = currentRoundMatches.find(
           (m: any) => m.status !== "completed" || m.winner_team_id === null
         );
 
         isCurrentRoundComplete = !incompleteMatch;
+
+        // Determine next round
+        if (currentRoundIndex < validRounds.length - 1) {
+          nextRound = validRounds[currentRoundIndex + 1];
+        }
       }
+    }
+
+    // If no matches exist, next round is the first valid round
+    if (currentRound === null && validRounds.length > 0) {
+      nextRound = validRounds[0];
     }
 
     return c.json({

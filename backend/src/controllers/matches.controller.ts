@@ -1098,3 +1098,198 @@ export async function getMatchState(c: Context<AuthContext>) {
     throw new HTTPException(500, { message: (error as Error).message });
   }
 }
+
+// GET /matches/referee - Get all matches assigned to current user as referee
+export async function getRefereeMatches(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+
+    // Get all matches where current user is assigned as referee
+    const { data: matches, error } = await supabase
+      .from("matches")
+      .select(
+        `
+        id,
+        tournament_id,
+        refree_id,
+        court_id,
+        winner_team_id,
+        round,
+        status,
+        start_time,
+        end_time,
+        tournaments (
+          id,
+          name,
+          description,
+          image_url,
+          start_time,
+          end_time,
+          venue:venue (
+            id,
+            name,
+            address
+          )
+        ),
+        courts (
+          id,
+          court_number
+        )
+      `
+      )
+      .eq("refree_id", playerId)
+      .order("start_time", { ascending: false });
+
+    if (error) {
+      throw new HTTPException(500, { message: error.message });
+    }
+
+    // Get pairings for these matches to get team/player info
+    const matchIds = matches?.map((m: any) => m.id) || [];
+    
+    if (matchIds.length === 0) {
+      return c.json({ data: { matches: [] } });
+    }
+
+    const { data: pairings } = await supabase
+      .from("pairings")
+      .select("id, match_id")
+      .in("match_id", matchIds);
+
+    const pairingIds = pairings?.map((p: any) => p.id) || [];
+
+    if (pairingIds.length > 0) {
+      const { data: pairingTeams } = await supabase
+        .from("pairing_teams")
+        .select("pairing_id, team_id")
+        .in("pairing_id", pairingIds);
+
+      const teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter(Boolean) || [];
+
+      if (teamIds.length > 0) {
+        const { data: teamMembers } = await supabase
+          .from("team_members")
+          .select(
+            `
+            team_id,
+            player_id,
+            players (
+              id,
+              username,
+              photo_url
+            )
+          `
+          )
+          .in("team_id", teamIds);
+
+        // Get latest scores
+        const { data: scores } = await supabase
+          .from("scores")
+          .select("match_id, team_a_score, team_b_score, created_at")
+          .in("match_id", matchIds)
+          .order("created_at", { ascending: false });
+
+        // Build match details with players and scores
+        const matchesWithDetails = matches?.map((match: any) => {
+          const matchPairings = pairings?.filter((p: any) => p.match_id === match.id) || [];
+          const matchPairingIds = matchPairings.map((p: any) => p.id);
+          const matchPairingTeams = pairingTeams?.filter((pt: any) =>
+            matchPairingIds.includes(pt.pairing_id)
+          ) || [];
+          const matchTeamIds = matchPairingTeams.map((pt: any) => pt.team_id);
+
+          const players = matchTeamIds.flatMap((teamId: number) => {
+            return teamMembers
+              ?.filter((tm: any) => tm.team_id === teamId)
+              .map((tm: any) => {
+                const player = Array.isArray(tm.players) ? tm.players[0] : tm.players;
+                return {
+                  id: player?.id,
+                  username: player?.username,
+                  team_id: teamId,
+                };
+              }) || [];
+          });
+
+          const matchScores = scores?.filter((s: any) => s.match_id === match.id) || [];
+          const latestScore = matchScores.length > 0 
+            ? matchScores.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+            : null;
+
+          const tournament = Array.isArray(match.tournaments)
+            ? match.tournaments[0]
+            : match.tournaments;
+          const court = Array.isArray(match.courts) ? match.courts[0] : match.courts;
+
+          return {
+            id: match.id,
+            tournament_id: match.tournament_id,
+            tournament: tournament
+              ? {
+                  id: tournament.id,
+                  name: tournament.name,
+                  description: tournament.description,
+                  image_url: tournament.image_url,
+                  start_time: tournament.start_time,
+                  end_time: tournament.end_time,
+                  venue: tournament.venue,
+                }
+              : null,
+            round: match.round,
+            status: match.status,
+            court: court?.court_number || null,
+            start_time: match.start_time,
+            end_time: match.end_time,
+            players: players || [],
+            scores: latestScore
+              ? {
+                  teamA: latestScore.team_a_score || 0,
+                  teamB: latestScore.team_b_score || 0,
+                }
+              : null,
+          };
+        });
+
+        return c.json({ data: { matches: matchesWithDetails || [] } });
+      }
+    }
+
+    // Return matches without detailed player info if no pairings found
+    const matchesWithTournament = matches?.map((match: any) => {
+      const tournament = Array.isArray(match.tournaments)
+        ? match.tournaments[0]
+        : match.tournaments;
+      const court = Array.isArray(match.courts) ? match.courts[0] : match.courts;
+
+      return {
+        id: match.id,
+        tournament_id: match.tournament_id,
+        tournament: tournament
+          ? {
+              id: tournament.id,
+              name: tournament.name,
+              description: tournament.description,
+              image_url: tournament.image_url,
+              start_time: tournament.start_time,
+              end_time: tournament.end_time,
+              venue: tournament.venue,
+            }
+          : null,
+        round: match.round,
+        status: match.status,
+        court: court?.court_number || null,
+        start_time: match.start_time,
+        end_time: match.end_time,
+        players: [],
+        scores: null,
+      };
+    });
+
+    return c.json({ data: { matches: matchesWithTournament || [] } });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
