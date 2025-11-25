@@ -76,6 +76,7 @@ export default function TournamentDetailsPage() {
     registration_fee,
     registered_count,
     registered_players,
+    image_url,
   } = tournament;
 
   const category =
@@ -105,8 +106,16 @@ export default function TournamentDetailsPage() {
       </ScrollablePageHeader>
 
       <ScrollablePageContent className="space-y-4">
-        {/* Image Placeholder */}
-        <div className="w-full h-[412px] bg-gray-200 rounded-b-3xl" />
+        {/* Tournament Image */}
+        {image_url ? (
+          <img
+            src={image_url}
+            alt={name}
+            className="w-full h-[412px] object-cover rounded-b-3xl"
+          />
+        ) : (
+          <div className="w-full h-[412px] bg-gray-200 rounded-b-3xl" />
+        )}
 
         {/* Tournament Overview Card */}
         <Card className="mx-4 p-4 gap-4 -mt-12">
@@ -184,14 +193,26 @@ export default function TournamentDetailsPage() {
             <h3 className="font-bold text-lg mb-2">Hosted By</h3>
             <Card className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-200 rounded-full" />
+                {hosted_by.photo_url ? (
+                  <img
+                    src={hosted_by.photo_url}
+                    alt={hosted_by.name || "Host"}
+                    className="size-12 rounded-full object-cover border-2 border-gray-200"
+                  />
+                ) : (
+                  <div className="size-12 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-gray-600">
+                      {(hosted_by.name || "H")[0].toUpperCase()}
+                    </span>
+                  </div>
+                )}
                 <div className="flex-1">
                   <p className="font-medium">{hosted_by.name}</p>
                   <p className="text-sm text-gray-600">Host</p>
                 </div>
-                <Button variant="ghost" size="icon">
+                {/* <Button variant="ghost" size="icon">
                   <Phone className="size-5" />
-                </Button>
+                </Button> */}
               </div>
             </Card>
           </div>
@@ -203,18 +224,30 @@ export default function TournamentDetailsPage() {
             <h3 className="font-bold text-lg mb-2">Referee&apos;s</h3>
             <div className="space-y-2">
               {referee.map((ref, index) => (
-                <Card key={index} className="p-4">
+                <Card key={ref.id || index} className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-200 rounded-full" />
+                    {ref.photo_url ? (
+                      <img
+                        src={ref.photo_url}
+                        alt={ref.name || "Referee"}
+                        className="size-12 rounded-full object-cover border-2 border-gray-200"
+                      />
+                    ) : (
+                      <div className="size-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-bold text-gray-600">
+                          {(ref.name || "R")[0].toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex-1">
                       <p className="font-medium">{ref.name}</p>
                       <p className="text-sm text-gray-600">
                         {ref.role || "Referee"}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon">
+                    {/* <Button variant="ghost" size="icon">
                       <Phone className="size-5" />
-                    </Button>
+                    </Button> */}
                   </div>
                 </Card>
               ))}
@@ -231,14 +264,17 @@ export default function TournamentDetailsPage() {
                 <Card key={player.id} className="p-4">
                   <div className="flex items-center gap-3">
                     {player.photo_url ? (
-                      // <img
-                      //   src={player.photo_url}
-                      //   alt={player.name || player.username}
-                      //   className="size-12 rounded-full object-cover"
-                      // />
-                      <div className="size-12 bg-gray-200 rounded-full" />
+                      <img
+                        src={player.photo_url}
+                        alt={player.name || player.username || "Player"}
+                        className="size-12 rounded-full object-cover border-2 border-gray-200"
+                      />
                     ) : (
-                      <div className="size-12 bg-gray-200 rounded-full" />
+                      <div className="size-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-bold text-gray-600">
+                          {(player.name || player.username || "P")[0].toUpperCase()}
+                        </span>
+                      </div>
                     )}
                     <div className="flex-1">
                       <p className="font-medium">

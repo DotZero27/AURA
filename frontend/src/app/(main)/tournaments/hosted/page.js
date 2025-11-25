@@ -236,9 +236,9 @@ export default function HostedTournamentsPage() {
           {tournaments.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-600 mb-4">You haven't hosted any tournaments yet.</p>
-              <Button onClick={() => router.push("/tournaments/new")}>
+              {/* <Button onClick={() => router.push("/tournaments/new")}>
                 Create Tournament
-              </Button>
+              </Button> */}
             </div>
           ) : (
             <div>

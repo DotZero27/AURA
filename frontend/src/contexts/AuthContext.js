@@ -81,6 +81,54 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const signUp = async (email, password, metadata = {}) => {
+    try {
+      // Get the current origin for email redirect
+      const redirectTo = typeof window !== 'undefined' 
+        ? `${window.location.origin}/` 
+        : undefined;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+          data: {
+            username: metadata.username,
+            gender: metadata.gender,
+            dob: metadata.dob,
+            photo_url: metadata.photo_url,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // If session exists, user is auto-confirmed and logged in
+      if (data.session) {
+        setUser(data.user);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('auth_token', data.session.access_token);
+          // Also set cookie for middleware
+          document.cookie = `auth_token=${data.session.access_token}; path=/; max-age=86400`;
+        }
+        return { success: true };
+      }
+      
+      // If no session but user exists, email confirmation is required
+      // However, if auto-confirm is enabled in Supabase, this shouldn't happen
+      if (data.user) {
+        // Try to get session after a brief delay (in case of async confirmation)
+        // For auto-confirm setups, this is usually not needed
+        return { success: true, requiresConfirmation: true, user: data.user };
+      }
+      
+      return { success: false, error: 'Signup failed - no user created' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -100,6 +148,7 @@ export function AuthProvider({ children }) {
     user,
     loading,
     signIn,
+    signUp,
     signOut,
     isAuthenticated: !!user,
   };

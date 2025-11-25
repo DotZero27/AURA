@@ -6,7 +6,7 @@ export function proxy(request) {
   const { pathname } = request.nextUrl;
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/login'];
+  const publicRoutes = ['/login', '/signup'];
   const isPublicRoute = publicRoutes.includes(pathname);
 
   // If accessing a protected route without token, redirect to login
@@ -14,7 +14,7 @@ export function proxy(request) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If accessing login page with token, redirect to home
+  // If accessing login or signup page with token, redirect to home
   if (isPublicRoute && token) {
     return NextResponse.redirect(new URL('/', request.url));
   }

@@ -43,7 +43,7 @@ export default function ProfilePage() {
     return <div className="p-4 text-center">User not found</div>;
   }
 
-  const { name, username, aura, age, gender, tournaments } = userData;
+  const { name, username, aura, age, gender, photo_url, tournaments } = userData;
   console.log(tournaments);
 
   // Helper function to check if tournament is live (started but not ended)
@@ -100,7 +100,19 @@ export default function ProfilePage() {
 
       {/* Profile Section */}
       <div className="flex flex-col items-center py-6">
-        <div className="w-24 h-24 bg-purple-200 rounded-full mb-3" />
+        {photo_url ? (
+          <img
+            src={photo_url}
+            alt={name || username || "Profile"}
+            className="size-24 rounded-full object-cover border-2 border-purple-200 mb-3"
+          />
+        ) : (
+          <div className="size-24 bg-purple-200 rounded-full mb-3 flex items-center justify-center">
+            <span className="text-2xl font-bold text-purple-600">
+              {(name || username || "U")[0].toUpperCase()}
+            </span>
+          </div>
+        )}
         <h2 className="text-xl font-bold capitalize">{name || username}</h2>
         <p className="text-sm text-gray-600 capitalize">
           {gender || "Other"} · {age} years
@@ -210,7 +222,7 @@ export default function ProfilePage() {
                 {liveTournamentsList.map((tournament, index) => (
                   <div
                     key={tournament.id}
-                    onClick={() => router.push(`/tournaments/${tournament.id}`)}
+                    onClick={() => router.push(`/tournaments/${tournament.id}/stats`)}
                     className="mb-3"
                   >
                     <TournamentCard tournament={tournament} index={index} />

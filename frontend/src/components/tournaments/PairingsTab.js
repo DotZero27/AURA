@@ -3,6 +3,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { useEffect, useState, useRef, useMemo } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { createWebSocketConnection } from "@/lib/websocket";
 
 // Format player name with dot (e.g., "Hugh . Saturation")
@@ -86,6 +87,10 @@ function PairingsSkeleton() {
 }
 
 export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
+  const router = useRouter();
+  const params = useParams();
+  const tournamentId = params.id;
+  
   // State to store real-time scores for each match
   const [realtimeScores, setRealtimeScores] = useState({});
   const wsConnectionsRef = useRef({});
@@ -218,7 +223,15 @@ export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
         const isComplete = pairing.status === "complete" || pairing.status === "completed";
 
         return (
-          <div key={pairing.id} className="bg-white rounded-lg border">
+          <div 
+            key={pairing.id} 
+            className="bg-white rounded-lg border cursor-pointer hover:border-purple-300 transition-colors"
+            onClick={() => {
+              if (matchId && tournamentId) {
+                router.push(`/tournaments/${tournamentId}/${selectedRound}/${matchId}`);
+              }
+            }}
+          >
             <div className="flex items-center justify-between rounded-t-lg p-4 border-b bg-gray-50">
               <h3 className="text-sm font-medium text-purple-600">
                 {selectedRound} Round • Court {pairing.court}

@@ -32,7 +32,10 @@ export default function MatchDetailsPage() {
   const [winnerTeamId, setWinnerTeamId] = useState(null);
   const [scoreHistory, setScoreHistory] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null); // null, "A", or "B"
-  const [scoreAnimation, setScoreAnimation] = useState({ teamA: false, teamB: false });
+  const [scoreAnimation, setScoreAnimation] = useState({
+    teamA: false,
+    teamB: false,
+  });
   const prevScoreA = useRef(0);
   const prevScoreB = useRef(0);
   const wsConnectionRef = useRef(null);
@@ -89,7 +92,8 @@ export default function MatchDetailsPage() {
       } else {
         // Fallback: calculate from score ratio
         const total = teamA + teamB;
-        const initialWinRate = total > 0 ? Math.round((teamA / total) * 100) : 50;
+        const initialWinRate =
+          total > 0 ? Math.round((teamA / total) * 100) : 50;
         setWinRate(initialWinRate);
       }
     } else {
@@ -172,11 +176,17 @@ export default function MatchDetailsPage() {
   useEffect(() => {
     if (scoreA !== prevScoreA.current && prevScoreA.current !== 0) {
       setScoreAnimation((prev) => ({ ...prev, teamA: true }));
-      setTimeout(() => setScoreAnimation((prev) => ({ ...prev, teamA: false })), 600);
+      setTimeout(
+        () => setScoreAnimation((prev) => ({ ...prev, teamA: false })),
+        600
+      );
     }
     if (scoreB !== prevScoreB.current && prevScoreB.current !== 0) {
       setScoreAnimation((prev) => ({ ...prev, teamB: true }));
-      setTimeout(() => setScoreAnimation((prev) => ({ ...prev, teamB: false })), 600);
+      setTimeout(
+        () => setScoreAnimation((prev) => ({ ...prev, teamB: false })),
+        600
+      );
     }
     prevScoreA.current = scoreA;
     prevScoreB.current = scoreB;
@@ -273,7 +283,7 @@ export default function MatchDetailsPage() {
             <ArrowLeft className="size-5" />
           </Button>
           <h1 className="text-lg font-bold">{tournament_name}</h1>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="invisible">
             <MoreVertical className="size-5" />
           </Button>
         </div>
@@ -315,7 +325,10 @@ export default function MatchDetailsPage() {
                 <div className="relative mb-2">
                   <motion.div
                     className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                    whileHover={{ scale: 1.1, boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)" }}
+                    whileHover={{
+                      scale: 1.1,
+                      boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)",
+                    }}
                     transition={{ duration: 0.2 }}
                   >
                     {player.aura.toFixed(1) || "5.0"}
@@ -398,7 +411,10 @@ export default function MatchDetailsPage() {
                 <div className="relative mb-2">
                   <motion.div
                     className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                    whileHover={{ scale: 1.1, boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)" }}
+                    whileHover={{
+                      scale: 1.1,
+                      boxShadow: "0 10px 25px rgba(147, 51, 234, 0.4)",
+                    }}
                     transition={{ duration: 0.2 }}
                   >
                     {player.aura.toFixed(1) || "5.0"}
@@ -423,7 +439,9 @@ export default function MatchDetailsPage() {
           <Button
             variant={selectedTeam === "A" ? "default" : "outline"}
             size="sm"
-            className={selectedTeam === "A" ? "bg-purple-600 hover:bg-purple-700" : ""}
+            className={
+              selectedTeam === "A" ? "bg-purple-600 hover:bg-purple-700" : ""
+            }
             onClick={() => setSelectedTeam(selectedTeam === "A" ? null : "A")}
           >
             Team A
@@ -431,7 +449,9 @@ export default function MatchDetailsPage() {
           <Button
             variant={selectedTeam === "B" ? "default" : "outline"}
             size="sm"
-            className={selectedTeam === "B" ? "bg-orange-600 hover:bg-orange-700" : ""}
+            className={
+              selectedTeam === "B" ? "bg-orange-600 hover:bg-orange-700" : ""
+            }
             onClick={() => setSelectedTeam(selectedTeam === "B" ? null : "B")}
           >
             Team B
@@ -452,9 +472,7 @@ export default function MatchDetailsPage() {
                 : "bg-purple-600"
             }`}
             style={{
-              width: `${
-                selectedTeam === "B" ? 100 - winRate : winRate
-              }%`,
+              width: `${selectedTeam === "B" ? 100 - winRate : winRate}%`,
             }}
           />
         </div>
@@ -514,7 +532,10 @@ export default function MatchDetailsPage() {
                 stroke="#9ca3af"
                 tick={{ fill: "#6b7280", fontSize: 10 }}
                 domain={[0, xAxisMax]}
-                ticks={Array.from({ length: Math.floor(xAxisMax / 5) + 1 }, (_, i) => i * 5)}
+                ticks={Array.from(
+                  { length: Math.floor(xAxisMax / 5) + 1 },
+                  (_, i) => i * 5
+                )}
               />
               <YAxis
                 stroke="#9ca3af"

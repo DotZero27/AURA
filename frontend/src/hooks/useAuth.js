@@ -19,12 +19,40 @@ export function useAuth() {
     },
   });
 
+  const signupMutation = useMutation({
+    mutationFn: async ({ email, password, username, gender, dob, photo_url }) => {
+      const result = await authContext.signUp(email, password, {
+        username,
+        gender,
+        dob,
+        photo_url,
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'Sign up failed');
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      if (result.requiresConfirmation) {
+        // If email confirmation is required, you might want to show a message
+        // For now, we'll still redirect to home if session exists
+        router.push('/');
+      } else {
+        router.push('/');
+      }
+    },
+  });
+
   return {
     ...authContext,
     login: loginMutation.mutate,
     loginAsync: loginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
     loginError: loginMutation.error,
+    signup: signupMutation.mutate,
+    signupAsync: signupMutation.mutateAsync,
+    isSigningUp: signupMutation.isPending,
+    signupError: signupMutation.error,
   };
 }
 

@@ -167,4 +167,47 @@ CREATE TABLE scores (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- This trigger automatically creates a profile entry when a new user signs up via Supabase Auth.
+-- See https://supabase.com/docs/guides/auth/managing-user-data#using-triggers for more details.
 
+-- Drop existing trigger and function to ensure clean recreation
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+
+-- Create the function
+CREATE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+SET search_path = ''
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  new_player_id INTEGER;
+BEGIN
+  -- Insert into players table and get the player_id
+  INSERT INTO public.players (user_id, username, dob, gender, photo_url)
+  VALUES (
+    NEW.id,
+    NEW.raw_user_meta_data->>'username',
+    CASE 
+      WHEN NEW.raw_user_meta_data->>'dob' IS NOT NULL AND NEW.raw_user_meta_data->>'dob' != '' 
+      THEN (NEW.raw_user_meta_data->>'dob')::date 
+      ELSE NULL 
+    END,
+    NEW.raw_user_meta_data->>'gender',
+    NEW.raw_user_meta_data->>'photo_url'
+  )
+  RETURNING id INTO new_player_id;
+
+  -- Insert initial rating record with default values
+  INSERT INTO public.ratings (player_id)
+  VALUES (new_player_id);
+
+  RETURN NEW;
+END;
+$$;
+
+-- Create the trigger
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

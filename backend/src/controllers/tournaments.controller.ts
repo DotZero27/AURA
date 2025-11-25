@@ -317,8 +317,10 @@ export async function getTournamentById(c: Context<AuthContext>) {
         `
       player_id,
       players!inner (
+        id,
         username,
-        user_id
+        user_id,
+        photo_url
       )
     `
       )
@@ -330,7 +332,10 @@ export async function getTournamentById(c: Context<AuthContext>) {
       const player = Array.isArray(ref.players) ? ref.players[0] : ref.players;
       return {
         player_id: ref.player_id,
+        id: player?.id,
         name: player?.username || null,
+        username: player?.username || null,
+        photo_url: player?.photo_url || null,
         phone: null, // Phone not available in current schema - would need players.phone column
       };
     });

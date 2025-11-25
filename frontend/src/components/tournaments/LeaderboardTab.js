@@ -83,6 +83,9 @@ export function LeaderboardTab({ topThree, remaining, isLoading }) {
               className="flex flex-col items-center"
             >
               <div className="relative mb-2">
+                <Badge className="absolute -top-1 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white px-2 py-0.5 rounded-full text-xs font-medium z-10">
+                  AURA: {topThree[1].aura ? topThree[1].aura.toFixed(1) : topThree[1].aura_mu ? topThree[1].aura_mu.toFixed(1) : "N/A"}
+                </Badge>
                 <div className="w-20 h-20 bg-linear-to-b from-white to-gray-300 rounded-full" />
                 <Badge className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white w-7 h-7 flex items-center justify-center p-0 rounded-full text-xs font-bold">
                   2
@@ -106,6 +109,9 @@ export function LeaderboardTab({ topThree, remaining, isLoading }) {
               className="flex flex-col items-center"
             >
               <div className="relative mb-2">
+                <Badge className="absolute -top-1 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white px-2 py-0.5 rounded-full text-xs font-medium z-10">
+                  AURA: {topThree[0].aura ? topThree[0].aura.toFixed(1) : topThree[0].aura_mu ? topThree[0].aura_mu.toFixed(1) : "N/A"}
+                </Badge>
                 <div className="w-24 h-24 bg-linear-to-b from-white to-gray-300 rounded-full" />
                 <Badge className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white w-7 h-7 flex items-center justify-center p-0 rounded-full text-xs font-bold">
                   1
@@ -129,6 +135,9 @@ export function LeaderboardTab({ topThree, remaining, isLoading }) {
               className="flex flex-col items-center"
             >
               <div className="relative mb-2">
+                <Badge className="absolute -top-1 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white px-2 py-0.5 rounded-full text-xs font-medium z-10">
+                  AURA: {topThree[2].aura ? topThree[2].aura.toFixed(1) : topThree[2].aura_mu ? topThree[2].aura_mu.toFixed(1) : "N/A"}
+                </Badge>
                 <div className="w-20 h-20 bg-linear-to-b from-white to-gray-300 rounded-full" />
                 <Badge className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white w-7 h-7 flex items-center justify-center p-0 rounded-full text-xs font-bold">
                   3
