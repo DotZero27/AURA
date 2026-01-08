@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { ScrollablePage, ScrollablePageHeader, ScrollablePageContent } from "@/components/layout/ScrollablePage";
-import { LogOut, User, Trophy, Hash, Medal, Activity, Zap, Plus, ChevronRight, MapPin } from "lucide-react";
+import { LogOut, User, Trophy, Hash, Medal, Activity, Zap, Plus, ChevronRight, MapPin, CalendarDays, Users } from "lucide-react";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -100,8 +100,8 @@ export default function ProfilePage() {
   // Get all referee tournaments
   const allRefereeTournaments = refereeData?.tournaments || [];
 
-  // Get all referee matches
-  const allRefereeMatches = refereeMatchesData?.matches || [];
+  // Get all referee matches (filter out bye matches)
+  const allRefereeMatches = (refereeMatchesData?.matches || []).filter(match => match.status !== 'bye');
 
   // Get all hosted tournaments
   const allHostedTournaments = hostedData?.tournaments || [];
@@ -221,7 +221,7 @@ export default function ProfilePage() {
               <TabsTrigger value="live" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Live</TabsTrigger>
               <TabsTrigger value="past" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Past</TabsTrigger>
               <TabsTrigger value="hosted" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Hosted</TabsTrigger>
-              <TabsTrigger value="referee" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Official</TabsTrigger>
+              <TabsTrigger value="referee" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Referee</TabsTrigger>
             </TabsList>
 
             {/* Live Matches Tab */}
@@ -406,15 +406,131 @@ export default function ProfilePage() {
                   <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
                 </div>
               ) : allHostedTournaments.length > 0 ? (
-                allHostedTournaments.map((tournament, index) => (
-                  <div
-                    key={tournament.id}
-                    onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
-                    className="cursor-pointer"
-                  >
-                    <TournamentCard tournament={tournament} index={index} />
-                  </div>
-                ))
+                allHostedTournaments.map((tournament) => {
+                  const registeredCount = tournament.registered_count || 0;
+                  const capacity = tournament.capacity || 0;
+                  const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
+                  
+                  // Determine tournament status
+                  const now = new Date();
+                  const startDate = tournament.start_date ? new Date(tournament.start_date) : null;
+                  const endDate = tournament.end_date ? new Date(tournament.end_date) : null;
+                  let status = 'upcoming';
+                  let statusLabel = 'Upcoming';
+                  let statusColor = 'bg-blue-500/10 text-blue-600';
+                  
+                  if (startDate && endDate) {
+                    if (now >= startDate && now <= endDate) {
+                      status = 'live';
+                      statusLabel = 'Live';
+                      statusColor = 'bg-red-500/10 text-red-600 animate-pulse';
+                    } else if (now > endDate) {
+                      status = 'completed';
+                      statusLabel = 'Completed';
+                      statusColor = 'bg-green-500/10 text-green-600';
+                    }
+                  }
+
+                  return (
+                    <Card
+                      key={tournament.id}
+                      onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
+                      className="cursor-pointer overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-primary/10"
+                    >
+                      <div className="p-4 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-black tracking-tight uppercase italic line-clamp-1 text-foreground mb-1">
+                              {tournament.name}
+                            </h3>
+                            {tournament.venue?.name && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <MapPin className="size-3" />
+                                <span className="line-clamp-1">{tournament.venue.name}</span>
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase shrink-0 ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+
+                        {/* Registration Stats */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Users className="size-3.5" />
+                              Registrations
+                            </span>
+                            <span className="font-black text-foreground">
+                              {registeredCount}/{capacity} Teams
+                            </span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-linear-to-r from-brand-blue to-brand-green transition-all duration-300"
+                              style={{ width: `${Math.min(progress, 100)}%` }}
+                            />
+                          </div>
+                          {capacity > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {capacity - registeredCount} spots remaining
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Tournament Details */}
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                          <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-lg border border-border/50">
+                            <CalendarDays className="size-3.5 text-primary" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-bold text-foreground uppercase truncate">
+                                {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'}
+                              </span>
+                              <span className="text-[10px] font-medium text-muted-foreground">Start Date</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-lg border border-border/50">
+                            <Trophy className="size-3.5 text-primary" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-bold text-foreground uppercase truncate">
+                                {tournament.match_format?.eligible_gender === "M" 
+                                  ? "Men's" 
+                                  : tournament.match_format?.eligible_gender === "W" 
+                                  ? "Women's" 
+                                  : "Mixed"}
+                              </span>
+                              <span className="text-[10px] font-medium text-muted-foreground">Format</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <Button
+                          className="w-full gap-2 font-bold"
+                          variant={status === 'live' ? 'default' : 'outline'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/tournaments/${tournament.id}/manage`);
+                          }}
+                        >
+                          {status === 'live' ? (
+                            <>
+                              <Activity className="size-4" />
+                              Manage Tournament
+                            </>
+                          ) : (
+                            <>
+                              Manage Tournament
+                              <ChevronRight className="size-4" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
                   <div className="bg-muted/30 p-4 rounded-full">
@@ -442,7 +558,7 @@ export default function ProfilePage() {
                     <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Matches to Officiate</h4>
                   </div>
                   {allRefereeMatches.map((match) => (
-                    <Card key={match.id} className="overflow-hidden border-border/50">
+                    <Card key={match.id} className="py-0 overflow-hidden border-border/50">
                       <div className="flex">
                         {/* Status Indicator */}
                         <div className={`w-1.5 ${match.status === 'in_progress' ? 'bg-red-500' :
