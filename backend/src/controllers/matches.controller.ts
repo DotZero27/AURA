@@ -1120,7 +1120,7 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
       return c.json({ data: { matches: [] } });
     }
 
-    // Get all matches from tournaments where user is a referee
+    // Get matches from tournaments where user is a referee AND assigned to the match
     const { data: matches, error } = await supabase
       .from("matches")
       .select(
@@ -1154,6 +1154,7 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
       `
       )
       .in("tournament_id", tournamentIds)
+      .eq("refree_id", playerId)
       .order("start_time", { ascending: false });
 
     if (error) {
