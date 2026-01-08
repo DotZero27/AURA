@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useUser } from "@/hooks/useUser";
 import { useAuth } from "@/contexts/AuthContext";
-import { tournamentsApi } from "@/lib/api";
+import { tournamentsApi, matchesApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,7 +16,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { data: userData, isLoading } = useUser();
   const { signOut } = useAuth();
-  
+
   // Fetch referee tournaments
   const { data: refereeData, isLoading: isLoadingReferee } = useQuery({
     queryKey: ["referee-tournaments"],
@@ -35,6 +35,15 @@ export default function ProfilePage() {
     },
   });
 
+  // Fetch referee matches (matches from tournaments where user is a referee)
+  const { data: refereeMatchesData, isLoading: isLoadingRefereeMatches } = useQuery({
+    queryKey: ["referee-matches"],
+    queryFn: async () => {
+      const response = await matchesApi.getRefereeMatches();
+      return response.data.data;
+    },
+  });
+
   if (isLoading) {
     return (
       <ScrollablePage className="bg-background/20">
@@ -49,9 +58,9 @@ export default function ProfilePage() {
             <div className="mt-6 w-[300px] h-32 bg-muted animate-pulse rounded-2xl" />
           </div>
           <div className="px-4 space-y-4">
-             <div className="h-12 w-full bg-muted animate-pulse rounded-full" />
-             <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
-             <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
+            <div className="h-12 w-full bg-muted animate-pulse rounded-full" />
+            <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
+            <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
           </div>
         </ScrollablePageContent>
       </ScrollablePage>
@@ -61,12 +70,12 @@ export default function ProfilePage() {
   if (!userData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center space-y-4">
-         <div className="bg-muted p-4 rounded-full">
-           <User className="size-8 text-muted-foreground" />
-         </div>
-         <h2 className="text-xl font-bold">Profile Not Found</h2>
-         <p className="text-muted-foreground">Please log in to view your profile.</p>
-         <Button onClick={() => router.push('/login')}>Log In</Button>
+        <div className="bg-muted p-4 rounded-full">
+          <User className="size-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-bold">Profile Not Found</h2>
+        <p className="text-muted-foreground">Please log in to view your profile.</p>
+        <Button onClick={() => router.push('/login')}>Log In</Button>
       </div>
     );
   }
@@ -87,9 +96,12 @@ export default function ProfilePage() {
     const partner = match.players.find(p => p.team === me.team && p.username !== username);
     return partner?.name || partner?.username || "Partner";
   };
-  
+
   // Get all referee tournaments
   const allRefereeTournaments = refereeData?.tournaments || [];
+
+  // Get all referee matches
+  const allRefereeMatches = refereeMatchesData?.matches || [];
 
   // Get all hosted tournaments
   const allHostedTournaments = hostedData?.tournaments || [];
@@ -100,11 +112,11 @@ export default function ProfilePage() {
       <ScrollablePageHeader className="pb-0 bg-transparent">
         <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/80 border-b border-border/40 supports-backdrop-filter:bg-background/60">
           <div className="flex items-center justify-between px-4 py-3">
-             <div className="flex items-center gap-2">
-               <span className="text-xl font-black italic tracking-tighter text-foreground">
-                 AURA
-               </span>
-             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-black italic tracking-tighter text-foreground">
+                AURA
+              </span>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -119,338 +131,410 @@ export default function ProfilePage() {
       </ScrollablePageHeader>
 
       <ScrollablePageContent className="pb-24">
-      {/* Sporty Profile Header */}
-      <div className="relative overflow-hidden mb-6">
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110" />
-        <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16" />
-        
-        <div className="flex flex-col items-center pt-8 pb-4 relative z-10 px-4">
+        {/* Sporty Profile Header */}
+        <div className="relative overflow-hidden mb-6">
+          {/* Abstract Background Shapes */}
+          <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110" />
+          <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16" />
+
+          <div className="flex flex-col items-center pt-8 pb-4 relative z-10 px-4">
             {/* Avatar with "Pro Ring" */}
             <div className="relative mb-4 group">
-                <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full animate-in spin-in-3 duration-1000 opacity-80" />
-                <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full blur-sm opacity-50" />
-                {photo_url ? (
+              <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full animate-in spin-in-3 duration-1000 opacity-80" />
+              <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full blur-sm opacity-50" />
+              {photo_url ? (
                 <img
-                    src={photo_url}
-                    alt={name || username || "Profile"}
-                    className="size-32 rounded-full object-cover border-4 border-background relative z-10"
+                  src={photo_url}
+                  alt={name || username || "Profile"}
+                  className="size-32 rounded-full object-cover border-4 border-background relative z-10"
                 />
-                ) : (
+              ) : (
                 <div className="size-32 bg-background rounded-full flex items-center justify-center border-4 border-background relative z-10">
-                    <User className="size-12 text-muted-foreground" />
+                  <User className="size-12 text-muted-foreground" />
                 </div>
-                )}
-         
+              )}
+
             </div>
 
             <h2 className="text-3xl font-black italic tracking-tight uppercase text-foreground">
-                {name || username}
+              {name || username}
             </h2>
             <div className="capitalize flex items-center gap-3 mt-1 text-sm font-medium text-muted-foreground">
-                <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
-                    <User className="size-3" /> {gender || "Athlete"}
-                </span>
-                <span className="w-px h-3 bg-border" />
-                <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
-                    <Activity className="size-3" /> {age} Yrs
-                </span>
+              <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
+                <User className="size-3" /> {gender || "Athlete"}
+              </span>
+              <span className="w-px h-3 bg-border" />
+              <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
+                <Activity className="size-3" /> {age} Yrs
+              </span>
             </div>
-        </div>
+          </div>
 
-        {/* Stats Grid */}
-        <div className="px-4">
+          {/* Stats Grid */}
+          <div className="px-4">
             <div className="grid grid-cols-2 gap-3">
-                {/* Main Aura Card - "AURA CARD" */}
-                <Card className="col-span-2 relative overflow-hidden bg-foreground text-background border-none shadow-xl">
-                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-size-[10px_10px]" />
-                    <div className="absolute right-0 top-0 size-32 bg-linear-to-br from-primary to-transparent opacity-20 blur-2xl rounded-full transform translate-x-12 -translate-y-12" />
-                    
-                    <div className="relative z-10 p-5 flex items-center justify-between">
-                        <div>
-                            <div className="flex items-center gap-1.5 text-primary mb-1">
-                                <Zap className="size-4 fill-primary" />
-                                <span className="text-xs font-bold tracking-widest uppercase">Aura Rating</span>
-                            </div>
-                            <div className="text-5xl font-black italic tracking-tighter leading-none">
-                                {aura ? aura.toFixed(2) : "0.00"}
-                            </div>
-                        </div>
-                       
-                    </div>
-                </Card>
+              {/* Main Aura Card - "AURA CARD" */}
+              <Card className="col-span-2 relative overflow-hidden bg-foreground text-background border-none shadow-xl">
+                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-size-[10px_10px]" />
+                <div className="absolute right-0 top-0 size-32 bg-linear-to-br from-primary to-transparent opacity-20 blur-2xl rounded-full transform translate-x-12 -translate-y-12" />
 
-                {/* Secondary Stats */}
-                <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Matches</span>
-                        <span className="text-2xl font-black">{pastMatches.length + liveMatches.length}</span>
+                <div className="relative z-10 p-5 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-primary mb-1">
+                      <Zap className="size-4 fill-primary" />
+                      <span className="text-xs font-bold tracking-widest uppercase">Aura Rating</span>
                     </div>
-                </Card>
-                <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Win Rate</span>
-                        <span className="text-2xl font-black text-green-500">
-                           {pastMatches.length > 0 
-                             ? Math.round((pastMatches.filter(m => m.status === 'won').length / pastMatches.length) * 100) 
-                             : 0}%
-                        </span>
+                    <div className="text-5xl font-black italic tracking-tighter leading-none">
+                      {aura ? aura.toFixed(2) : "0.00"}
                     </div>
-                </Card>
+                  </div>
+
+                </div>
+              </Card>
+
+              {/* Secondary Stats */}
+              <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Matches</span>
+                  <span className="text-2xl font-black">{pastMatches.length + liveMatches.length}</span>
+                </div>
+              </Card>
+              <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Win Rate</span>
+                  <span className="text-2xl font-black text-green-500">
+                    {pastMatches.length > 0
+                      ? Math.round((pastMatches.filter(m => m.status === 'won').length / pastMatches.length) * 100)
+                      : 0}%
+                  </span>
+                </div>
+              </Card>
             </div>
+          </div>
         </div>
-      </div>
 
-      {/* Tournaments Section */}
-      <div className="px-4">
-         {/* Sporty Tabs */}
-        <Tabs defaultValue="live" className="w-full">
-          <TabsList className="w-full h-12 p-1.5 bg-muted/30 rounded-xl mb-6 grid grid-cols-4">
-            <TabsTrigger value="live" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Live</TabsTrigger>
-            <TabsTrigger value="past" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Past</TabsTrigger>
-            <TabsTrigger value="hosted" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Hosted</TabsTrigger>
-            <TabsTrigger value="referee" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Official</TabsTrigger>
-          </TabsList>
+        {/* Tournaments Section */}
+        <div className="px-4">
+          {/* Sporty Tabs */}
+          <Tabs defaultValue="live" className="w-full">
+            <TabsList className="w-full h-12 p-1.5 bg-muted/30 rounded-xl mb-6 grid grid-cols-4">
+              <TabsTrigger value="live" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Live</TabsTrigger>
+              <TabsTrigger value="past" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Past</TabsTrigger>
+              <TabsTrigger value="hosted" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Hosted</TabsTrigger>
+              <TabsTrigger value="referee" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Official</TabsTrigger>
+            </TabsList>
 
-          {/* Live Matches Tab */}
-          <TabsContent value="live" className="space-y-4">
-            {/* Live Matches (matches user is playing in) */}
-            {liveMatches.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
+            {/* Live Matches Tab */}
+            <TabsContent value="live" className="space-y-4">
+              {/* Live Matches (matches user is playing in) */}
+              {liveMatches.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
                     <div className="size-2 rounded-full bg-red-500 animate-pulse" />
                     <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Live Matches</h4>
-                </div>
-                {liveMatches.map((match) => (
-                  <Card key={match.match_id} className="overflow-hidden border-2 border-primary/20 shadow-lg">
-                    {/* Header */}
-                    <div className="bg-primary/5 p-3 flex justify-between items-center border-b border-primary/10">
+                  </div>
+                  {liveMatches.map((match) => (
+                    <Card key={match.match_id} className="overflow-hidden border-2 border-primary/20 shadow-lg">
+                      {/* Header */}
+                      <div className="bg-primary/5 p-3 flex justify-between items-center border-b border-primary/10">
                         <div className="flex flex-col gap-0.5">
                           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                             {match.tournament_name}
                           </div>
                           <div className="text-xs font-bold uppercase tracking-wide text-primary">
-                              {match.round}
+                            {match.round}
                           </div>
                         </div>
                         <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded animate-pulse">
-                            LIVE
+                          LIVE
                         </div>
-                    </div>
-                    
-                    {/* Score Display */}
-                    <div className="p-4 bg-linear-to-b from-background to-muted/20">
-                      <div className="flex items-center justify-between">
-                         {/* Team A */}
-                         <div className="flex flex-col items-center gap-2 flex-1">
-                             <div className="size-10 rounded-full bg-brand-blue/10 flex items-center justify-center border-2 border-brand-blue/20 text-brand-blue font-black text-sm">
-                                 A
-                             </div>
-                             <span className="text-2xl font-black tabular-nums">{match.scores?.teamA || 0}</span>
-                         </div>
-
-                         {/* VS */}
-                         <div className="text-xs font-bold text-muted-foreground/50 italic px-4">VS</div>
-
-                         {/* Team B */}
-                         <div className="flex flex-col items-center gap-2 flex-1">
-                             <span className="text-2xl font-black tabular-nums">{match.scores?.teamB || 0}</span>
-                             <div className="size-10 rounded-full bg-brand-green/10 flex items-center justify-center border-2 border-brand-green/20 text-brand-green font-black text-sm">
-                                 B
-                             </div>
-                         </div>
                       </div>
-                      
-                      {match.court && (
-                        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
-                          <MapPin className="size-3" />
-                          <span>Court {match.court}</span>
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Action Buttons */}
-                    <div className="p-3 bg-muted/30 border-t border-border/50 grid grid-cols-2 gap-2">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="gap-1.5 text-xs font-bold"
-                        onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
-                      >
-                        Go to Match
-                        <ChevronRight className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-xs font-bold"
-                        onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
-                      >
-                        View Tournament
-                        <ChevronRight className="size-3.5" />
-                      </Button>
+                      {/* Score Display */}
+                      <div className="p-4 bg-linear-to-b from-background to-muted/20">
+                        <div className="flex items-center justify-between">
+                          {/* Team A */}
+                          <div className="flex flex-col items-center gap-2 flex-1">
+                            <div className="size-10 rounded-full bg-brand-blue/10 flex items-center justify-center border-2 border-brand-blue/20 text-brand-blue font-black text-sm">
+                              A
+                            </div>
+                            <span className="text-2xl font-black tabular-nums">{match.scores?.teamA || 0}</span>
+                          </div>
+
+                          {/* VS */}
+                          <div className="text-xs font-bold text-muted-foreground/50 italic px-4">VS</div>
+
+                          {/* Team B */}
+                          <div className="flex flex-col items-center gap-2 flex-1">
+                            <span className="text-2xl font-black tabular-nums">{match.scores?.teamB || 0}</span>
+                            <div className="size-10 rounded-full bg-brand-green/10 flex items-center justify-center border-2 border-brand-green/20 text-brand-green font-black text-sm">
+                              B
+                            </div>
+                          </div>
+                        </div>
+
+                        {match.court && (
+                          <div className="mt-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="size-3" />
+                            <span>Court {match.court}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="p-3 bg-muted/30 border-t border-border/50 grid grid-cols-2 gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="gap-1.5 text-xs font-bold"
+                          onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
+                        >
+                          Go to Match
+                          <ChevronRight className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs font-bold"
+                          onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
+                        >
+                          View Tournament
+                          <ChevronRight className="size-3.5" />
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                  <div className="bg-muted/30 p-4 rounded-full">
+                    <Trophy className="size-8 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-muted-foreground text-sm font-medium">No live matches.</p>
+                  <Button variant="outline" size="sm" onClick={() => router.push('/')}>Find a Tournament</Button>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Past Matches Tab */}
+            <TabsContent value="past" className="space-y-3 mt-0">
+              {pastMatches.length > 0 ? (
+                pastMatches.map((match) => (
+                  <Card key={match.match_id} className="p-0 border-border/50 overflow-hidden">
+                    <div className="flex">
+                      {/* W/L Indicator Strip */}
+                      <div className={`w-1.5 ${match.status === "won" ? "bg-green-500" : match.status === "lost" ? "bg-red-500" : "bg-muted-foreground"}`} />
+
+                      <div className="flex-1">
+                        <div className="p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                {match.tournament_name}
+                              </span>
+                              <span className="text-xs font-bold uppercase text-primary">{match.round}</span>
+                            </div>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${match.status === "won"
+                                ? "bg-green-500/10 text-green-600"
+                                : match.status === "lost"
+                                  ? "bg-red-500/10 text-red-600"
+                                  : "bg-muted text-muted-foreground"
+                              }`}>
+                              {match.status === "won" ? "Victory" : match.status === "lost" ? "Defeat" : match.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-bold">You & {getPartnerName(match)}</div>
+                            </div>
+                            <div className="flex items-center gap-3 font-mono font-black text-lg">
+                              <span className={match.status === "won" ? "text-green-600" : ""}>{match.scores?.teamA || 0}</span>
+                              <span className="text-muted-foreground/30">-</span>
+                              <span className={match.status === "lost" ? "text-red-500" : ""}>{match.scores?.teamB || 0}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="px-3 pb-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="flex-1 gap-1.5 text-xs font-medium h-8"
+                            onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
+                          >
+                            View Match
+                            <ChevronRight className="size-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="flex-1 gap-1.5 text-xs font-medium h-8"
+                            onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
+                          >
+                            Tournament
+                            <ChevronRight className="size-3" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
-                 <div className="bg-muted/30 p-4 rounded-full">
-                    <Trophy className="size-8 text-muted-foreground/30" />
-                 </div>
-                 <p className="text-muted-foreground text-sm font-medium">No live matches.</p>
-                 <Button variant="outline" size="sm" onClick={() => router.push('/')}>Find a Tournament</Button>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Past Matches Tab */}
-          <TabsContent value="past" className="space-y-3 mt-0">
-            {pastMatches.length > 0 ? (
-              pastMatches.map((match) => (
-                <Card key={match.match_id} className="p-0 border-border/50 overflow-hidden">
-                   <div className="flex">
-                       {/* W/L Indicator Strip */}
-                       <div className={`w-1.5 ${match.status === "won" ? "bg-green-500" : match.status === "lost" ? "bg-red-500" : "bg-muted-foreground"}`} />
-                       
-                       <div className="flex-1">
-                         <div className="p-3">
-                           <div className="flex justify-between items-center mb-2">
-                               <div className="flex flex-col gap-0.5">
-                                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                                   {match.tournament_name}
-                                 </span>
-                                 <span className="text-xs font-bold uppercase text-primary">{match.round}</span>
-                               </div>
-                               <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                                 match.status === "won" 
-                                   ? "bg-green-500/10 text-green-600" 
-                                   : match.status === "lost" 
-                                     ? "bg-red-500/10 text-red-600"
-                                     : "bg-muted text-muted-foreground"
-                               }`}>
-                                   {match.status === "won" ? "Victory" : match.status === "lost" ? "Defeat" : match.status}
-                               </span>
-                           </div>
-                           
-                           <div className="flex items-center justify-between">
-                               <div className="flex items-center gap-2">
-                                   <div className="text-sm font-bold">You & {getPartnerName(match)}</div>
-                               </div>
-                               <div className="flex items-center gap-3 font-mono font-black text-lg">
-                                   <span className={match.status === "won" ? "text-green-600" : ""}>{match.scores?.teamA || 0}</span>
-                                   <span className="text-muted-foreground/30">-</span>
-                                   <span className={match.status === "lost" ? "text-red-500" : ""}>{match.scores?.teamB || 0}</span>
-                               </div>
-                           </div>
-                         </div>
-                         
-                         {/* Action Buttons */}
-                         <div className="px-3 pb-3 flex gap-2">
-                           <Button
-                             size="sm"
-                             variant="ghost"
-                             className="flex-1 gap-1.5 text-xs font-medium h-8"
-                             onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
-                           >
-                             View Match
-                             <ChevronRight className="size-3" />
-                           </Button>
-                           <Button
-                             size="sm"
-                             variant="ghost"
-                             className="flex-1 gap-1.5 text-xs font-medium h-8"
-                             onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
-                           >
-                             Tournament
-                             <ChevronRight className="size-3" />
-                           </Button>
-                         </div>
-                       </div>
-                   </div>
-                </Card>
-              ))
-            ) : (
+                ))
+              ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
-                 <div className="bg-muted/30 p-4 rounded-full">
+                  <div className="bg-muted/30 p-4 rounded-full">
                     <Hash className="size-8 text-muted-foreground/30" />
-                 </div>
-                 <p className="text-muted-foreground text-sm font-medium">No match history recorded.</p>
-              </div>
-            )}
-          </TabsContent>
+                  </div>
+                  <p className="text-muted-foreground text-sm font-medium">No match history recorded.</p>
+                </div>
+              )}
+            </TabsContent>
 
-          {/* Hosted Tournaments Tab */}
-          <TabsContent value="hosted" className="space-y-4 mt-0">
-            <Button
-              className="w-full gap-2 mb-4"
-              variant="outline"
-              onClick={() => router.push("/tournaments/new")}
-            >
-              <Plus className="size-4" />
-              Create Tournament
-            </Button>
-            {isLoadingHosted ? (
-              <div className="space-y-3">
-                <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
-              </div>
-            ) : allHostedTournaments.length > 0 ? (
-              allHostedTournaments.map((tournament, index) => (
-                <div
-                  key={tournament.id}
-                  onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
-                  className="cursor-pointer"
-                >
-                  <TournamentCard tournament={tournament} index={index} />
+            {/* Hosted Tournaments Tab */}
+            <TabsContent value="hosted" className="space-y-4 mt-0">
+              <Button
+                className="w-full gap-2 mb-4"
+                variant="outline"
+                onClick={() => router.push("/tournaments/new")}
+              >
+                <Plus className="size-4" />
+                Create Tournament
+              </Button>
+              {isLoadingHosted ? (
+                <div className="space-y-3">
+                  <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
                 </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
-                <div className="bg-muted/30 p-4 rounded-full">
-                  <Trophy className="size-8 text-muted-foreground/30" />
+              ) : allHostedTournaments.length > 0 ? (
+                allHostedTournaments.map((tournament, index) => (
+                  <div
+                    key={tournament.id}
+                    onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
+                    className="cursor-pointer"
+                  >
+                    <TournamentCard tournament={tournament} index={index} />
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                  <div className="bg-muted/30 p-4 rounded-full">
+                    <Trophy className="size-8 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-muted-foreground text-sm font-medium">You haven't hosted any tournaments yet.</p>
+                  <Button variant="outline" size="sm" onClick={() => router.push('/tournaments/new')}>
+                    Host Your First Tournament
+                  </Button>
                 </div>
-                <p className="text-muted-foreground text-sm font-medium">You haven't hosted any tournaments yet.</p>
-                <Button variant="outline" size="sm" onClick={() => router.push('/tournaments/new')}>
-                  Host Your First Tournament
-                </Button>
-              </div>
-            )}
-          </TabsContent>
+              )}
+            </TabsContent>
 
-          {/* Referee Tournaments Tab */}
-          <TabsContent value="referee" className="space-y-4 mt-0">
-             <Button
-              className="w-full gap-2 mb-4"
-              variant="outline"
-              onClick={() => router.push("/tournaments/new")}
-            >
-              <Plus className="size-4" />
-              Create Tournament
-            </Button>
-            {isLoadingReferee ? (
-               <div className="space-y-3">
-                 <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
-              </div>
-            ) : allRefereeTournaments.length > 0 ? (
-              allRefereeTournaments.map((tournament, index) => (
-                <div
-                  key={tournament.id}
-                  onClick={() => router.push(`/tournaments/${tournament.id}`)}
-                >
-                  <TournamentCard tournament={tournament} index={index} />
+            {/* Referee Matches Tab */}
+            <TabsContent value="referee" className="space-y-4 mt-0">
+              {isLoadingRefereeMatches || isLoadingReferee ? (
+                <div className="space-y-3">
+                  <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
+                  <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
                 </div>
-              ))
-            ) : (
-               <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
-                 <div className="bg-muted/30 p-4 rounded-full">
+              ) : allRefereeMatches.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap className="size-4 text-primary" />
+                    <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Matches to Officiate</h4>
+                  </div>
+                  {allRefereeMatches.map((match) => (
+                    <Card key={match.id} className="overflow-hidden border-border/50">
+                      <div className="flex">
+                        {/* Status Indicator */}
+                        <div className={`w-1.5 ${match.status === 'in_progress' ? 'bg-red-500' :
+                            match.status === 'completed' ? 'bg-green-500' :
+                              'bg-yellow-500'
+                          }`} />
+
+                        <div className="flex-1 p-3">
+                          {/* Header */}
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                {match.tournament?.name || 'Tournament'}
+                              </span>
+                              <span className="text-xs font-bold uppercase text-primary">
+                                {match.round}
+                              </span>
+                            </div>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${match.status === 'in_progress'
+                                ? 'bg-red-500/10 text-red-600 animate-pulse'
+                                : match.status === 'completed'
+                                  ? 'bg-green-500/10 text-green-600'
+                                  : 'bg-yellow-500/10 text-yellow-600'
+                              }`}>
+                              {match.status === 'in_progress' ? 'LIVE' :
+                                match.status === 'completed' ? 'DONE' : 'PENDING'}
+                            </span>
+                          </div>
+
+                          {/* Players/Teams */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="text-sm font-medium truncate flex-1">
+                              {match.players?.length > 0
+                                ? match.players.map(p => p.username).join(' & ').substring(0, 30) + (match.players.length > 2 ? '...' : '')
+                                : 'Teams TBD'
+                              }
+                            </div>
+                            {match.scores && (
+                              <div className="flex items-center gap-2 font-mono font-bold text-lg">
+                                <span>{match.scores.teamA || 0}</span>
+                                <span className="text-muted-foreground/30">-</span>
+                                <span>{match.scores.teamB || 0}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Button */}
+                          <Button
+                            size="sm"
+                            className="w-full gap-2 font-bold"
+                            variant={match.status === 'completed' ? 'outline' : 'default'}
+                            onClick={() => router.push(`/tournaments/referee/${match.tournament_id}/${match.round}/${match.id}`)}
+                          >
+                            {match.status === 'in_progress' ? (
+                              <><Zap className="size-4" /> Continue Scoring</>
+                            ) : match.status === 'completed' ? (
+                              <>View Match</>
+                            ) : (
+                              <><Zap className="size-4" /> Score Match</>
+                            )}
+                            <ChevronRight className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : allRefereeTournaments.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground text-center mb-4">No matches yet. Waiting for host to start rounds.</p>
+                  {allRefereeTournaments.map((tournament, index) => (
+                    <div
+                      key={tournament.id}
+                      onClick={() => router.push(`/tournaments/${tournament.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <TournamentCard tournament={tournament} index={index} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                  <div className="bg-muted/30 p-4 rounded-full">
                     <Zap className="size-8 text-muted-foreground/30" />
-                 </div>
-                 <p className="text-muted-foreground text-sm font-medium">Not an official yet.</p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+                  </div>
+                  <p className="text-muted-foreground text-sm font-medium">Not an official yet.</p>
+                  <p className="text-muted-foreground/60 text-xs">Ask a host to add you as a referee.</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
       </ScrollablePageContent>
     </ScrollablePage>
   );

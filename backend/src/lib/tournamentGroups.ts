@@ -4,7 +4,7 @@
  * ============================================================================
  * 
  * Functions for initializing tournament groups using snake draft.
- * Reads teams from tournament_invites table (status = 'accepted').
+ * Reads teams directly from teams table using tournament_id.
  */
 
 import { supabase } from './supabase';
@@ -32,12 +32,12 @@ interface GroupResult {
 // ============================================================================
 
 /**
- * Get teams for a tournament
+ * Get teams for a tournament directly from teams table
  * @param tournamentId - Tournament ID
  * @param strictMode - If true, only return teams with exactly 2 members (for group initialization)
  *                     If false, return all teams including incomplete ones (for display)
  */
-export async function getTeamsFromInvites(tournamentId: number, strictMode: boolean = false): Promise<Team[]> {
+export async function getTeamsForTournament(tournamentId: number, strictMode: boolean = false): Promise<Team[]> {
     // First, try to get team IDs from tournament metadata (if groups are initialized)
     const { data: tournament } = await supabase
         .from('tournaments')
@@ -53,18 +53,16 @@ export async function getTeamsFromInvites(tournamentId: number, strictMode: bool
         const groupTeamIds = Object.values(metadata.groups as Record<string, number[]>).flat();
         teamIds = [...new Set(groupTeamIds)];
     }
-    
-    // Also get from accepted invites (for teams not yet in groups)
-    const { data: invites, error } = await supabase
-        .from('tournament_invites')
-        .select('team_id')
-        .eq('tournament_id', tournamentId)
-        .eq('status', 'accepted')
-        .not('team_id', 'is', null);
 
-    if (invites && invites.length > 0) {
-        const inviteTeamIds = invites.map(inv => inv.team_id).filter(Boolean) as number[];
-        teamIds = [...new Set([...teamIds, ...inviteTeamIds])];
+    // Get teams directly from teams table using tournament_id
+    const { data: registeredTeams, error } = await supabase
+        .from('teams')
+        .select('team_id')
+        .eq('tournament_id', tournamentId);
+
+    if (registeredTeams && registeredTeams.length > 0) {
+        const registeredTeamIds = registeredTeams.map(t => t.team_id);
+        teamIds = [...new Set([...teamIds, ...registeredTeamIds])];
     }
 
     if (teamIds.length === 0) {
@@ -115,7 +113,7 @@ export async function getTeamsFromInvites(tournamentId: number, strictMode: bool
 
     for (const teamId of teamIds) {
         const memberIds = teamMembersMap.get(teamId) || [];
-        
+
         // In strict mode, skip teams without exactly 2 members (for group initialization)
         if (strictMode && memberIds.length !== 2) {
             console.log(`Team ${teamId} has ${memberIds.length} members, skipping (strict mode requires 2)`);
@@ -159,6 +157,9 @@ export async function getTeamsFromInvites(tournamentId: number, strictMode: bool
     // Sort by rating DESC (highest first for snake draft)
     return teams.sort((a, b) => b.avg_rating - a.avg_rating);
 }
+
+// Keep old function name as alias for backward compatibility
+export const getTeamsFromInvites = getTeamsForTournament;
 
 /**
  * Snake draft distribution for balanced groups
@@ -219,14 +220,14 @@ export async function initializeGroups(
         return { success: false, groups: {}, message: 'Groups already initialized. Reset tournament first.' };
     }
 
-    // 3. Get teams from tournament_invites (strict mode - require 2 members)
-    const teams = await getTeamsFromInvites(tournamentId, true);
+    // 3. Get teams from teams table (strict mode - require 2 members)
+    const teams = await getTeamsForTournament(tournamentId, true);
 
     if (teams.length === 0) {
         return {
             success: false,
             groups: {},
-            message: 'No complete teams found. Each team must have 2 members and accept tournament invites.'
+            message: 'No complete teams found. Each team must have 2 registered members.'
         };
     }
 
@@ -365,13 +366,13 @@ export async function swapTeamGroup(
  */
 export async function resetGroups(tournamentId: number): Promise<{ success: boolean; message: string }> {
     console.log(`Resetting tournament ${tournamentId}...`);
-    
+
     // 1. Delete all matches for this tournament
     const { error: matchError, count: matchCount } = await supabase
         .from('matches')
         .delete()
         .eq('tournament_id', tournamentId);
-    
+
     if (matchError) {
         console.log(`Error deleting matches: ${matchError.message}`);
     } else {
@@ -386,27 +387,27 @@ export async function resetGroups(tournamentId: number): Promise<{ success: bool
 
     if (pairings && pairings.length > 0) {
         const pairingIds = pairings.map(p => p.id);
-        
+
         // Delete pairing_teams first (foreign key)
         const { error: ptError } = await supabase
             .from('pairing_teams')
             .delete()
             .in('pairing_id', pairingIds);
-        
+
         if (ptError) {
             console.log(`Error deleting pairing_teams: ${ptError.message}`);
         }
-        
+
         // Then delete pairings
         const { error: pError } = await supabase
             .from('pairings')
             .delete()
             .eq('tournament_id', tournamentId);
-        
+
         if (pError) {
             console.log(`Error deleting pairings: ${pError.message}`);
         }
-        
+
         console.log(`Deleted ${pairings.length} pairings and their teams`);
     }
 
@@ -421,7 +422,7 @@ export async function resetGroups(tournamentId: number): Promise<{ success: bool
 
     const { error: updateError } = await supabase
         .from('tournaments')
-        .update({ 
+        .update({
             metadata: {
                 format: existingMetadata?.format || 'group_knockout',
                 groups: null,

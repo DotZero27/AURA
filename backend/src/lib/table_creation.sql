@@ -94,7 +94,8 @@ CREATE TABLE tournaments_referee (
 -- TEAM PLAYERS (Junction Table)
 CREATE TABLE teams (
   team_id SERIAL PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  tournament_id INTEGER REFERENCES tournaments(id)
 );
 
 CREATE TABLE team_members (
