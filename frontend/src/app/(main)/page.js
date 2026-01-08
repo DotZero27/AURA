@@ -1,138 +1,456 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useTournaments } from "@/hooks/useTournaments";
-import { TournamentCard } from "@/components/tournaments/TournamentCard";
-import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useUser } from "@/hooks/useUser";
+import { useAuth } from "@/contexts/AuthContext";
+import { tournamentsApi } from "@/lib/api";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Menu, Users, Activity } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { ScrollablePage, ScrollablePageHeader, ScrollablePageContent } from "@/components/layout/ScrollablePage";
+import { LogOut, User, Trophy, Hash, Medal, Activity, Zap, Plus, ChevronRight, MapPin } from "lucide-react";
 
-export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState({});
-  const [showLiveOnly, setShowLiveOnly] = useState(false);
+export default function ProfilePage() {
+  const router = useRouter();
+  const { data: userData, isLoading } = useUser();
+  const { signOut } = useAuth();
+  
+  // Fetch referee tournaments
+  const { data: refereeData, isLoading: isLoadingReferee } = useQuery({
+    queryKey: ["referee-tournaments"],
+    queryFn: async () => {
+      const response = await tournamentsApi.getReferee();
+      return response.data.data;
+    },
+  });
 
-  const { data: tournamentsData, isLoading, error } = useTournaments(filters);
+  // Fetch hosted tournaments
+  const { data: hostedData, isLoading: isLoadingHosted } = useQuery({
+    queryKey: ["hosted-tournaments"],
+    queryFn: async () => {
+      const response = await tournamentsApi.getHosted();
+      return response.data.data;
+    },
+  });
 
-  const allTournaments = tournamentsData?.tournaments || [];
+  if (isLoading) {
+    return (
+      <ScrollablePage className="bg-background/20">
+        <ScrollablePageHeader className="pb-0 bg-transparent">
+          <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/80 border-b border-border/40 h-14" />
+        </ScrollablePageHeader>
+        <ScrollablePageContent className="pb-24">
+          <div className="flex flex-col items-center py-8">
+            <div className="size-28 rounded-full bg-muted animate-pulse mb-4" />
+            <div className="h-8 w-40 bg-muted animate-pulse rounded-md mb-2" />
+            <div className="h-4 w-24 bg-muted animate-pulse rounded-md" />
+            <div className="mt-6 w-[300px] h-32 bg-muted animate-pulse rounded-2xl" />
+          </div>
+          <div className="px-4 space-y-4">
+             <div className="h-12 w-full bg-muted animate-pulse rounded-full" />
+             <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
+             <div className="h-32 w-full bg-muted animate-pulse rounded-xl" />
+          </div>
+        </ScrollablePageContent>
+      </ScrollablePage>
+    );
+  }
 
-  // Helper function to check if tournament is live
-  const isTournamentLive = (tournament) => {
-    if (!tournament.start_date || !tournament.end_date) return false;
-    const now = new Date();
-    const startTime = new Date(tournament.start_date);
-    const endTime = new Date(tournament.end_date);
-    return now >= startTime && now <= endTime;
+  if (!userData) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center space-y-4">
+         <div className="bg-muted p-4 rounded-full">
+           <User className="size-8 text-muted-foreground" />
+         </div>
+         <h2 className="text-xl font-bold">Profile Not Found</h2>
+         <p className="text-muted-foreground">Please log in to view your profile.</p>
+         <Button onClick={() => router.push('/login')}>Log In</Button>
+      </div>
+    );
+  }
+
+  const { name, username, aura, age, gender, photo_url, tournaments } = userData;
+
+  // Filter matches by status (matches user is playing in)
+  const liveMatches = tournaments?.filter((t) => t.status === "live") || [];
+  const pastMatches = tournaments?.filter((t) => t.status !== "live") || [];
+
+  // Helper to get partner name from match
+  const getPartnerName = (match) => {
+    if (!match.players || match.players.length === 0) return "Partner";
+    // Find current user in players
+    const me = match.players.find(p => p.username === username);
+    if (!me) return "Partner";
+    // Find partner (same team, different player)
+    const partner = match.players.find(p => p.team === me.team && p.username !== username);
+    return partner?.name || partner?.username || "Partner";
   };
+  
+  // Get all referee tournaments
+  const allRefereeTournaments = refereeData?.tournaments || [];
 
-  // Filter tournaments based on live filter and search query
-  const tournaments = useMemo(() => {
-    let filtered = allTournaments;
-
-    // Apply live filter
-    if (showLiveOnly) {
-      filtered = filtered.filter(isTournamentLive);
-    }
-
-    // Apply search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((tournament) =>
-        tournament.name?.toLowerCase().includes(query) ||
-        tournament.venue?.name?.toLowerCase().includes(query) ||
-        tournament.venue?.address?.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [allTournaments, showLiveOnly, searchQuery]);
-
-  const handleFilterClick = (gender) => {
-    setFilters((prev) => ({
-      ...prev,
-      eligible_gender: prev.eligible_gender === gender ? undefined : gender,
-    }));
-  };
+  // Get all hosted tournaments
+  const allHostedTournaments = hostedData?.tournaments || [];
 
   return (
-    <ScrollablePage>
-      <ScrollablePageHeader className="mb-4">
-        {/* Header */}
-        <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
-          <div className="flex items-center justify-center px-4 py-3">
-            <h1 className="text-lg font-bold">Tournaments</h1>
-            <div className="w-6" /> {/* Spacer */}
+    <ScrollablePage className="bg-background">
+      {/* Dynamic Header */}
+      <ScrollablePageHeader className="pb-0 bg-transparent">
+        <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/80 border-b border-border/40 supports-backdrop-filter:bg-background/60">
+          <div className="flex items-center justify-between px-4 py-3">
+             <div className="flex items-center gap-2">
+               <span className="text-xl font-black italic tracking-tighter text-foreground">
+                 AURA
+               </span>
+             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="size-4 mr-2" />
+              Logout
+            </Button>
           </div>
         </header>
-
-        {/* Search Bar */}
-        <div className="px-4 py-3 bg-white border-b border-gray-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 size-5 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-white"
-            />
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="p-2 bg-white border-b border-gray-200">
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => handleFilterClick("male")}
-              variant={filters.eligible_gender === "male" ? "default" : "outline"}
-            >
-              <Users className="size-4 mr-1" />
-              MD
-            </Button>
-            <Button
-              variant={
-                filters.eligible_gender === "female" ? "default" : "outline"
-              }
-              size="sm"
-              onClick={() => handleFilterClick("female")}
-            >
-              <Users className="size-4 mr-1" />
-              WD
-            </Button>
-            <Button
-              variant={showLiveOnly ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowLiveOnly(!showLiveOnly)}
-            >
-              <Activity className="size-4 mr-1" />
-              Live
-            </Button>
-          </div>
-        </div>
       </ScrollablePageHeader>
 
-      <ScrollablePageContent className="px-4">
-        {/* Tournament List */}
-        {isLoading && (
-          <div className="text-center py-8 text-gray-500">
-            Loading tournaments...
-          </div>
-        )}
-        {error && (
-          <div className="text-center py-8 text-red-500">
-            Error loading tournaments
-          </div>
-        )}
-        {!isLoading && !error && tournaments.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No tournaments found
-          </div>
-        )}
-        {tournaments.map((tournament, index) => (
-          <TournamentCard key={tournament.id} tournament={tournament} index={index} />
-        ))}
+      <ScrollablePageContent className="pb-24">
+      {/* Sporty Profile Header */}
+      <div className="relative overflow-hidden mb-6">
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110" />
+        <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16" />
+        
+        <div className="flex flex-col items-center pt-8 pb-4 relative z-10 px-4">
+            {/* Avatar with "Pro Ring" */}
+            <div className="relative mb-4 group">
+                <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full animate-in spin-in-3 duration-1000 opacity-80" />
+                <div className="absolute -inset-1 bg-linear-to-br from-brand-blue via-primary to-brand-green rounded-full blur-sm opacity-50" />
+                {photo_url ? (
+                <img
+                    src={photo_url}
+                    alt={name || username || "Profile"}
+                    className="size-32 rounded-full object-cover border-4 border-background relative z-10"
+                />
+                ) : (
+                <div className="size-32 bg-background rounded-full flex items-center justify-center border-4 border-background relative z-10">
+                    <User className="size-12 text-muted-foreground" />
+                </div>
+                )}
+         
+            </div>
+
+            <h2 className="text-3xl font-black italic tracking-tight uppercase text-foreground">
+                {name || username}
+            </h2>
+            <div className="capitalize flex items-center gap-3 mt-1 text-sm font-medium text-muted-foreground">
+                <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
+                    <User className="size-3" /> {gender || "Athlete"}
+                </span>
+                <span className="w-px h-3 bg-border" />
+                <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
+                    <Activity className="size-3" /> {age} Yrs
+                </span>
+            </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="px-4">
+            <div className="grid grid-cols-2 gap-3">
+                {/* Main Aura Card - "AURA CARD" */}
+                <Card className="col-span-2 relative overflow-hidden bg-foreground text-background border-none shadow-xl">
+                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-size-[10px_10px]" />
+                    <div className="absolute right-0 top-0 size-32 bg-linear-to-br from-primary to-transparent opacity-20 blur-2xl rounded-full transform translate-x-12 -translate-y-12" />
+                    
+                    <div className="relative z-10 p-5 flex items-center justify-between">
+                        <div>
+                            <div className="flex items-center gap-1.5 text-primary mb-1">
+                                <Zap className="size-4 fill-primary" />
+                                <span className="text-xs font-bold tracking-widest uppercase">Aura Rating</span>
+                            </div>
+                            <div className="text-5xl font-black italic tracking-tighter leading-none">
+                                {aura ? aura.toFixed(2) : "0.00"}
+                            </div>
+                        </div>
+                       
+                    </div>
+                </Card>
+
+                {/* Secondary Stats */}
+                <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Matches</span>
+                        <span className="text-2xl font-black">{pastMatches.length + liveMatches.length}</span>
+                    </div>
+                </Card>
+                <Card className="p-3 border-border/50 bg-background/50 hover:bg-background/80 transition-colors">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Win Rate</span>
+                        <span className="text-2xl font-black text-green-500">
+                           {pastMatches.length > 0 
+                             ? Math.round((pastMatches.filter(m => m.status === 'won').length / pastMatches.length) * 100) 
+                             : 0}%
+                        </span>
+                    </div>
+                </Card>
+            </div>
+        </div>
+      </div>
+
+      {/* Tournaments Section */}
+      <div className="px-4">
+         {/* Sporty Tabs */}
+        <Tabs defaultValue="live" className="w-full">
+          <TabsList className="w-full h-12 p-1.5 bg-muted/30 rounded-xl mb-6 grid grid-cols-4">
+            <TabsTrigger value="live" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Live</TabsTrigger>
+            <TabsTrigger value="past" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Past</TabsTrigger>
+            <TabsTrigger value="hosted" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Hosted</TabsTrigger>
+            <TabsTrigger value="referee" className="rounded-lg text-xs font-bold uppercase data-[state=active]:bg-foreground data-[state=active]:text-background transition-all">Official</TabsTrigger>
+          </TabsList>
+
+          {/* Live Matches Tab */}
+          <TabsContent value="live" className="space-y-4">
+            {/* Live Matches (matches user is playing in) */}
+            {liveMatches.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="size-2 rounded-full bg-red-500 animate-pulse" />
+                    <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Live Matches</h4>
+                </div>
+                {liveMatches.map((match) => (
+                  <Card key={match.match_id} className="overflow-hidden border-2 border-primary/20 shadow-lg">
+                    {/* Header */}
+                    <div className="bg-primary/5 p-3 flex justify-between items-center border-b border-primary/10">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                            {match.tournament_name}
+                          </div>
+                          <div className="text-xs font-bold uppercase tracking-wide text-primary">
+                              {match.round}
+                          </div>
+                        </div>
+                        <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded animate-pulse">
+                            LIVE
+                        </div>
+                    </div>
+                    
+                    {/* Score Display */}
+                    <div className="p-4 bg-linear-to-b from-background to-muted/20">
+                      <div className="flex items-center justify-between">
+                         {/* Team A */}
+                         <div className="flex flex-col items-center gap-2 flex-1">
+                             <div className="size-10 rounded-full bg-brand-blue/10 flex items-center justify-center border-2 border-brand-blue/20 text-brand-blue font-black text-sm">
+                                 A
+                             </div>
+                             <span className="text-2xl font-black tabular-nums">{match.scores?.teamA || 0}</span>
+                         </div>
+
+                         {/* VS */}
+                         <div className="text-xs font-bold text-muted-foreground/50 italic px-4">VS</div>
+
+                         {/* Team B */}
+                         <div className="flex flex-col items-center gap-2 flex-1">
+                             <span className="text-2xl font-black tabular-nums">{match.scores?.teamB || 0}</span>
+                             <div className="size-10 rounded-full bg-brand-green/10 flex items-center justify-center border-2 border-brand-green/20 text-brand-green font-black text-sm">
+                                 B
+                             </div>
+                         </div>
+                      </div>
+                      
+                      {match.court && (
+                        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="size-3" />
+                          <span>Court {match.court}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="p-3 bg-muted/30 border-t border-border/50 grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="gap-1.5 text-xs font-bold"
+                        onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
+                      >
+                        Go to Match
+                        <ChevronRight className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs font-bold"
+                        onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
+                      >
+                        View Tournament
+                        <ChevronRight className="size-3.5" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                 <div className="bg-muted/30 p-4 rounded-full">
+                    <Trophy className="size-8 text-muted-foreground/30" />
+                 </div>
+                 <p className="text-muted-foreground text-sm font-medium">No live matches.</p>
+                 <Button variant="outline" size="sm" onClick={() => router.push('/')}>Find a Tournament</Button>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Past Matches Tab */}
+          <TabsContent value="past" className="space-y-3 mt-0">
+            {pastMatches.length > 0 ? (
+              pastMatches.map((match) => (
+                <Card key={match.match_id} className="p-0 border-border/50 overflow-hidden">
+                   <div className="flex">
+                       {/* W/L Indicator Strip */}
+                       <div className={`w-1.5 ${match.status === "won" ? "bg-green-500" : match.status === "lost" ? "bg-red-500" : "bg-muted-foreground"}`} />
+                       
+                       <div className="flex-1">
+                         <div className="p-3">
+                           <div className="flex justify-between items-center mb-2">
+                               <div className="flex flex-col gap-0.5">
+                                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                   {match.tournament_name}
+                                 </span>
+                                 <span className="text-xs font-bold uppercase text-primary">{match.round}</span>
+                               </div>
+                               <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+                                 match.status === "won" 
+                                   ? "bg-green-500/10 text-green-600" 
+                                   : match.status === "lost" 
+                                     ? "bg-red-500/10 text-red-600"
+                                     : "bg-muted text-muted-foreground"
+                               }`}>
+                                   {match.status === "won" ? "Victory" : match.status === "lost" ? "Defeat" : match.status}
+                               </span>
+                           </div>
+                           
+                           <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-2">
+                                   <div className="text-sm font-bold">You & {getPartnerName(match)}</div>
+                               </div>
+                               <div className="flex items-center gap-3 font-mono font-black text-lg">
+                                   <span className={match.status === "won" ? "text-green-600" : ""}>{match.scores?.teamA || 0}</span>
+                                   <span className="text-muted-foreground/30">-</span>
+                                   <span className={match.status === "lost" ? "text-red-500" : ""}>{match.scores?.teamB || 0}</span>
+                               </div>
+                           </div>
+                         </div>
+                         
+                         {/* Action Buttons */}
+                         <div className="px-3 pb-3 flex gap-2">
+                           <Button
+                             size="sm"
+                             variant="ghost"
+                             className="flex-1 gap-1.5 text-xs font-medium h-8"
+                             onClick={() => router.push(`/tournaments/${match.tournament_id}/${match.round}/${match.match_id}`)}
+                           >
+                             View Match
+                             <ChevronRight className="size-3" />
+                           </Button>
+                           <Button
+                             size="sm"
+                             variant="ghost"
+                             className="flex-1 gap-1.5 text-xs font-medium h-8"
+                             onClick={() => router.push(`/tournaments/${match.tournament_id}/stats`)}
+                           >
+                             Tournament
+                             <ChevronRight className="size-3" />
+                           </Button>
+                         </div>
+                       </div>
+                   </div>
+                </Card>
+              ))
+            ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                 <div className="bg-muted/30 p-4 rounded-full">
+                    <Hash className="size-8 text-muted-foreground/30" />
+                 </div>
+                 <p className="text-muted-foreground text-sm font-medium">No match history recorded.</p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Hosted Tournaments Tab */}
+          <TabsContent value="hosted" className="space-y-4 mt-0">
+            <Button
+              className="w-full gap-2 mb-4"
+              variant="outline"
+              onClick={() => router.push("/tournaments/new")}
+            >
+              <Plus className="size-4" />
+              Create Tournament
+            </Button>
+            {isLoadingHosted ? (
+              <div className="space-y-3">
+                <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
+              </div>
+            ) : allHostedTournaments.length > 0 ? (
+              allHostedTournaments.map((tournament, index) => (
+                <div
+                  key={tournament.id}
+                  onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
+                  className="cursor-pointer"
+                >
+                  <TournamentCard tournament={tournament} index={index} />
+                </div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                <div className="bg-muted/30 p-4 rounded-full">
+                  <Trophy className="size-8 text-muted-foreground/30" />
+                </div>
+                <p className="text-muted-foreground text-sm font-medium">You haven't hosted any tournaments yet.</p>
+                <Button variant="outline" size="sm" onClick={() => router.push('/tournaments/new')}>
+                  Host Your First Tournament
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Referee Tournaments Tab */}
+          <TabsContent value="referee" className="space-y-4 mt-0">
+             <Button
+              className="w-full gap-2 mb-4"
+              variant="outline"
+              onClick={() => router.push("/tournaments/new")}
+            >
+              <Plus className="size-4" />
+              Create Tournament
+            </Button>
+            {isLoadingReferee ? (
+               <div className="space-y-3">
+                 <div className="h-32 w-full bg-muted/40 animate-pulse rounded-xl" />
+              </div>
+            ) : allRefereeTournaments.length > 0 ? (
+              allRefereeTournaments.map((tournament, index) => (
+                <div
+                  key={tournament.id}
+                  onClick={() => router.push(`/tournaments/${tournament.id}`)}
+                >
+                  <TournamentCard tournament={tournament} index={index} />
+                </div>
+              ))
+            ) : (
+               <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 border-2 border-dashed border-border/50 rounded-2xl bg-muted/5">
+                 <div className="bg-muted/30 p-4 rounded-full">
+                    <Zap className="size-8 text-muted-foreground/30" />
+                 </div>
+                 <p className="text-muted-foreground text-sm font-medium">Not an official yet.</p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
       </ScrollablePageContent>
     </ScrollablePage>
   );

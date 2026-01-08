@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
@@ -21,13 +21,51 @@ import {
   ScrollablePageHeader,
   ScrollablePageContent,
 } from "@/components/layout/ScrollablePage";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import {
+  ArrowLeft,
+  Trophy,
+  MapPin,
+  Users,
+  Calendar,
+  Clock,
+  DollarSign,
+  Image,
+  FileText,
+  Settings,
+  Layers,
+} from "lucide-react";
+
+// Tournament format options
+const TOURNAMENT_FORMATS = [
+  { 
+    value: 'swiss', 
+    label: 'Swiss System',
+    description: 'Players are paired based on points and ratings. Dynamic team formation each round.'
+  },
+  { 
+    value: 'group_knockout', 
+    label: 'Group Stage + Knockout',
+    description: 'Teams play in groups (round-robin), then top teams advance to knockout stage.'
+  },
+];
 
 // Validation schema
 const formSchema = z
   .object({
     name: z.string().min(1, "Tournament name is required"),
     description: z.string().min(1, "Description is required"),
+    tournament_format: z.enum(['swiss', 'group_knockout']).default('swiss'),
     venue_id: z
       .string()
       .min(1, "Venue is required")
@@ -118,11 +156,22 @@ const formSchema = z
 export default function CreateTournamentPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState(null);
 
-  // Set default datetime values
+  // Set default datetime values (1 hour ahead for start, 2 hours for end)
+  const formatDateTimeLocal = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+  
   const now = new Date();
-  const startTime = new Date(now.getTime() + 60 * 60 * 1000);
-  const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const startTime = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour ahead
+  const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours ahead
 
   // Fetch venues
   const { data: venuesData, isLoading: venuesLoading } = useQuery({
@@ -158,6 +207,7 @@ export default function CreateTournamentPage() {
     defaultValues: {
       name: "",
       description: "",
+      tournament_format: "swiss",
       venue_id: "",
       match_format: {
         eligible_gender: "MW",
@@ -178,8 +228,8 @@ export default function CreateTournamentPage() {
           },
         },
       },
-      start_time: startTime.toISOString().slice(0, 16),
-      end_time: endTime.toISOString().slice(0, 16),
+      start_time: formatDateTimeLocal(startTime),
+      end_time: formatDateTimeLocal(endTime),
       capacity: "",
       registration_fee: "0",
       image_url: "",
@@ -244,9 +294,15 @@ export default function CreateTournamentPage() {
           capacity: Number(parsed.capacity),
           registration_fee: Number(parsed.registration_fee) || 0,
           image_url: parsed.image_url || undefined,
+          // Store tournament format in metadata
+          metadata: {
+            format: value.tournament_format || 'swiss',
+          },
         };
 
-        createMutation.mutate(submitData);
+        // Store the submit data and show confirmation dialog
+        setPendingSubmitData(submitData);
+        setShowConfirmDialog(true);
       } catch (error) {
         if (error instanceof z.ZodError) {
           toast.error("Please fix the form errors before submitting");
@@ -260,25 +316,36 @@ export default function CreateTournamentPage() {
   });
 
   return (
-    <ScrollablePage>
-      <ScrollablePageHeader>
-        <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
+    <ScrollablePage className="bg-background">
+      <ScrollablePageHeader className="pb-0 bg-transparent">
+        <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/80 border-b border-border/40 supports-backdrop-filter:bg-background/60">
           <div className="flex items-center justify-between px-4 py-3">
-            <h1 className="text-lg font-bold">Create Tournament</h1>
-            <Button variant="ghost" onClick={() => router.back()}>
-              Cancel
+            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
+              <ArrowLeft className="size-5" />
             </Button>
+            <h1 className="text-lg font-black uppercase tracking-tight">New Tournament</h1>
+            <div className="size-10" />
           </div>
         </header>
       </ScrollablePageHeader>
 
-      <ScrollablePageContent>
-        <div className="p-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tournament Details</CardTitle>
-            </CardHeader>
-            <CardContent>
+      <ScrollablePageContent className="pb-24">
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110 pointer-events-none -z-10" />
+        <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none -z-10" />
+
+        <div className="p-4 space-y-6">
+          {/* Hero Section */}
+          <div className="text-center pt-4 pb-2">
+            <div className="inline-flex items-center justify-center size-16 rounded-2xl bg-primary/10 mb-4">
+              <Trophy className="size-8 text-primary" />
+            </div>
+            <h2 className="text-2xl font-black italic tracking-tight uppercase">Create Tournament</h2>
+            <p className="text-muted-foreground text-sm mt-1">Set up your competition details</p>
+          </div>
+
+          <Card className="border-border/50 bg-background/80 backdrop-blur-sm rounded-2xl shadow-sm overflow-hidden">
+            <CardContent className="p-5">
               <form
                 id="create-tournament-form"
                 onSubmit={(e) => {
@@ -287,101 +354,192 @@ export default function CreateTournamentPage() {
                 }}
               >
                 <FieldGroup>
-                  {/* Name */}
-                  <form.Field
-                    name="name"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Tournament Name *
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            placeholder="Enter tournament name"
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                  {/* Basic Info Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileText className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Basic Info</h3>
+                    </div>
 
-                  {/* Description */}
-                  <form.Field
-                    name="description"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Description *
-                          </FieldLabel>
-                          <textarea
-                            id={field.name}
-                            name={field.name}
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            placeholder="Enter tournament description"
-                            rows={4}
-                            className="w-full min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                    {/* Name */}
+                    <form.Field
+                      name="name"
+                      children={(field) => {
+                        const isInvalid =
+                          field.state.meta.isTouched && !field.state.meta.isValid;
+                        return (
+                          <Field data-invalid={isInvalid}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Tournament Name *
+                            </FieldLabel>
+                            <Input
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              aria-invalid={isInvalid}
+                              placeholder="Enter tournament name"
+                              className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                            />
+                            {isInvalid && (
+                              <FieldError errors={field.state.meta.errors} />
+                            )}
+                          </Field>
+                        );
+                      }}
+                    />
 
-                  {/* Venue */}
-                  <form.Field
-                    name="venue_id"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>Venue *</FieldLabel>
-                          <select
-                            id={field.name}
-                            name={field.name}
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            disabled={venuesLoading}
-                            className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50"
-                          >
-                            <option value="">Select a venue</option>
-                            {venues.map((venue) => (
-                              <option key={venue.id} value={venue.id}>
-                                {venue.name} - {venue.address}
-                              </option>
-                            ))}
-                          </select>
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                    {/* Description */}
+                    <form.Field
+                      name="description"
+                      children={(field) => {
+                        const isInvalid =
+                          field.state.meta.isTouched && !field.state.meta.isValid;
+                        return (
+                          <Field data-invalid={isInvalid}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Description *
+                            </FieldLabel>
+                            <textarea
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              aria-invalid={isInvalid}
+                              placeholder="Enter tournament description"
+                              rows={4}
+                              className="w-full min-h-[100px] rounded-xl border border-transparent bg-muted/40 px-4 py-3 text-sm transition-all outline-none focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20"
+                            />
+                            {isInvalid && (
+                              <FieldError errors={field.state.meta.errors} />
+                            )}
+                          </Field>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {/* Tournament Format Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Layers className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Tournament Format</h3>
+                    </div>
+
+                    <form.Field
+                      name="tournament_format"
+                      children={(field) => {
+                        return (
+                          <Field>
+                            <div className="grid grid-cols-1 gap-3">
+                              {TOURNAMENT_FORMATS.map((format) => (
+                                <label
+                                  key={format.value}
+                                  className={`relative flex cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                                    field.state.value === format.value
+                                      ? 'border-primary bg-primary/5 shadow-sm'
+                                      : 'border-border/50 hover:bg-muted/30 hover:border-border'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={field.name}
+                                    value={format.value}
+                                    checked={field.state.value === format.value}
+                                    onChange={(e) => field.handleChange(e.target.value)}
+                                    className="sr-only"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`size-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                        field.state.value === format.value
+                                          ? 'border-primary bg-primary'
+                                          : 'border-muted-foreground/30'
+                                      }`}>
+                                        {field.state.value === format.value && (
+                                          <div className="size-2 rounded-full bg-white" />
+                                        )}
+                                      </div>
+                                      <span className="font-bold text-sm">
+                                        {format.label}
+                                      </span>
+                                    </div>
+                                    <p className="mt-2 text-xs text-muted-foreground ml-8">
+                                      {format.description}
+                                    </p>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                            <FieldDescription className="mt-3 text-xs bg-muted/30 p-3 rounded-lg">
+                              {field.state.value === 'swiss' 
+                                ? '💡 Swiss system pairs players dynamically each round. Best for individual skill-based tournaments.'
+                                : '💡 Group + Knockout requires pre-formed teams. Teams compete in groups, then advance to knockout rounds.'
+                              }
+                            </FieldDescription>
+                          </Field>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {/* Venue Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <MapPin className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Location</h3>
+                    </div>
+
+                    <form.Field
+                      name="venue_id"
+                      children={(field) => {
+                        const isInvalid =
+                          field.state.meta.isTouched && !field.state.meta.isValid;
+                        return (
+                          <Field data-invalid={isInvalid}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Venue *</FieldLabel>
+                            <select
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              aria-invalid={isInvalid}
+                              disabled={venuesLoading}
+                              className="w-full h-11 rounded-xl border border-transparent bg-muted/40 px-4 py-2 text-sm transition-all outline-none focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                            >
+                              <option value="">Select a venue</option>
+                              {venues.map((venue) => (
+                                <option key={venue.id} value={venue.id}>
+                                  {venue.name} - {venue.address}
+                                </option>
+                              ))}
+                            </select>
+                            {isInvalid && (
+                              <FieldError errors={field.state.meta.errors} />
+                            )}
+                          </Field>
+                        );
+                      }}
+                    />
+                  </div>
 
                   {/* Match Format Section */}
-                  <div className="space-y-4 border-t pt-4">
-                    <h3 className="text-sm font-semibold">Match Format *</h3>
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Users className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Match Format</h3>
+                    </div>
 
                     {/* Eligible Gender */}
                     <form.Field
@@ -392,7 +550,7 @@ export default function CreateTournamentPage() {
                           !field.state.meta.isValid;
                         return (
                           <Field data-invalid={isInvalid}>
-                            <FieldLabel htmlFor={field.name}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                               Eligible Gender *
                             </FieldLabel>
                             <select
@@ -404,7 +562,7 @@ export default function CreateTournamentPage() {
                                 field.handleChange(e.target.value)
                               }
                               aria-invalid={isInvalid}
-                              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                              className="w-full h-11 rounded-xl border border-transparent bg-muted/40 px-4 py-2 text-sm transition-all outline-none focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20"
                             >
                               <option value="MW">
                                 Mixed (M & W) - Auto: Mixed Doubles
@@ -416,7 +574,7 @@ export default function CreateTournamentPage() {
                                 Female Only - Auto: Women's Doubles
                               </option>
                             </select>
-                            <FieldDescription>
+                            <FieldDescription className="text-xs mt-2">
                               Match type will be automatically generated based
                               on your selection
                             </FieldDescription>
@@ -438,7 +596,7 @@ export default function CreateTournamentPage() {
                             !field.state.meta.isValid;
                           return (
                             <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor={field.name}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Min Age
                               </FieldLabel>
                               <Input
@@ -453,6 +611,7 @@ export default function CreateTournamentPage() {
                                 }
                                 aria-invalid={isInvalid}
                                 placeholder="Optional"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
                               />
                               {isInvalid && (
                                 <FieldError errors={field.state.meta.errors} />
@@ -469,7 +628,7 @@ export default function CreateTournamentPage() {
                             !field.state.meta.isValid;
                           return (
                             <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor={field.name}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Max Age
                               </FieldLabel>
                               <Input
@@ -484,6 +643,7 @@ export default function CreateTournamentPage() {
                                 }
                                 aria-invalid={isInvalid}
                                 placeholder="Optional"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
                               />
                               {isInvalid && (
                                 <FieldError errors={field.state.meta.errors} />
@@ -495,10 +655,15 @@ export default function CreateTournamentPage() {
                     </div>
 
                     {/* Round Formation Rules */}
-                    <div className="space-y-4 border-t pt-4">
-                      <h3 className="text-sm font-semibold">
-                        Round Formation Rules
-                      </h3>
+                    <div className="space-y-4 pt-4 mt-4 border-t border-border/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="size-6 rounded-md bg-muted flex items-center justify-center">
+                          <Settings className="size-3 text-muted-foreground" />
+                        </div>
+                        <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                          Round Formation Rules
+                        </h4>
+                      </div>
 
                       {/* Final */}
                       <form.Field
@@ -509,7 +674,7 @@ export default function CreateTournamentPage() {
                             !field.state.meta.isValid;
                           return (
                             <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor={field.name}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Final - Best Of
                               </FieldLabel>
                               <Input
@@ -524,8 +689,9 @@ export default function CreateTournamentPage() {
                                 }
                                 aria-invalid={isInvalid}
                                 placeholder="7"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
                               />
-                              <FieldDescription>
+                              <FieldDescription className="text-xs">
                                 Number of sets in the final match (e.g., 7 means
                                 first to win 4 sets wins)
                               </FieldDescription>
@@ -546,7 +712,7 @@ export default function CreateTournamentPage() {
                             !field.state.meta.isValid;
                           return (
                             <Field data-invalid={isInvalid}>
-                              <FieldLabel htmlFor={field.name}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Semi Final - Best Of
                               </FieldLabel>
                               <Input
@@ -561,8 +727,9 @@ export default function CreateTournamentPage() {
                                 }
                                 aria-invalid={isInvalid}
                                 placeholder="5"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
                               />
-                              <FieldDescription>
+                              <FieldDescription className="text-xs">
                                 Number of sets in semi final matches (e.g., 5
                                 means first to win 3 sets wins)
                               </FieldDescription>
@@ -575,9 +742,9 @@ export default function CreateTournamentPage() {
                       />
 
                       {/* League */}
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium">
-                          League
+                      <div className="space-y-3 p-4 bg-muted/20 rounded-xl border border-border/30">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          League Settings
                         </label>
                         <div className="grid grid-cols-2 gap-4">
                           <form.Field
@@ -588,7 +755,7 @@ export default function CreateTournamentPage() {
                                 !field.state.meta.isValid;
                               return (
                                 <Field data-invalid={isInvalid}>
-                                  <FieldLabel htmlFor={field.name}>
+                                  <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Number of Rounds
                                   </FieldLabel>
                                   <Input
@@ -603,6 +770,7 @@ export default function CreateTournamentPage() {
                                     }
                                     aria-invalid={isInvalid}
                                     placeholder="4"
+                                    className="h-11 rounded-xl bg-background border-border/50 focus:border-input"
                                   />
                                   {isInvalid && (
                                     <FieldError
@@ -621,7 +789,7 @@ export default function CreateTournamentPage() {
                                 !field.state.meta.isValid;
                               return (
                                 <Field data-invalid={isInvalid}>
-                                  <FieldLabel htmlFor={field.name}>
+                                  <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Best Of
                                   </FieldLabel>
                                   <Input
@@ -636,6 +804,7 @@ export default function CreateTournamentPage() {
                                     }
                                     aria-invalid={isInvalid}
                                     placeholder="3"
+                                    className="h-11 rounded-xl bg-background border-border/50 focus:border-input"
                                   />
                                   {isInvalid && (
                                     <FieldError
@@ -647,180 +816,226 @@ export default function CreateTournamentPage() {
                             }}
                           />
                         </div>
-                        <FieldDescription>
+                        <FieldDescription className="text-xs">
                           League will have{" "}
-                          {form.state.values.match_format.metadata.set_rules
-                            .league._rounds || 4}{" "}
+                          <span className="font-bold">{form.state.values.match_format.metadata.set_rules
+                            .league._rounds || 4}</span>{" "}
                           rounds, where each match is best of{" "}
-                          {form.state.values.match_format.metadata.set_rules
-                            .league.best_of || 3}{" "}
+                          <span className="font-bold">{form.state.values.match_format.metadata.set_rules
+                            .league.best_of || 3}</span>{" "}
                           sets
                         </FieldDescription>
                       </div>
                     </div>
                   </div>
 
-                  {/* Start Time */}
-                  <form.Field
-                    name="start_time"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Start Time *
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            type="datetime-local"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                  {/* Schedule Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Calendar className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Schedule</h3>
+                    </div>
 
-                  {/* End Time */}
-                  <form.Field
-                    name="end_time"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            End Time *
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            type="datetime-local"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Start Time */}
+                      <form.Field
+                        name="start_time"
+                        children={(field) => {
+                          const isInvalid =
+                            field.state.meta.isTouched && !field.state.meta.isValid;
+                          return (
+                            <Field data-invalid={isInvalid}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Start Time *
+                              </FieldLabel>
+                              <Input
+                                id={field.name}
+                                name={field.name}
+                                type="datetime-local"
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                aria-invalid={isInvalid}
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                              />
+                              {isInvalid && (
+                                <FieldError errors={field.state.meta.errors} />
+                              )}
+                            </Field>
+                          );
+                        }}
+                      />
 
-                  {/* Capacity */}
-                  <form.Field
-                    name="capacity"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Capacity *
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            type="number"
-                            min="1"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            placeholder="Enter maximum number of participants"
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                      {/* End Time */}
+                      <form.Field
+                        name="end_time"
+                        children={(field) => {
+                          const isInvalid =
+                            field.state.meta.isTouched && !field.state.meta.isValid;
+                          return (
+                            <Field data-invalid={isInvalid}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                End Time *
+                              </FieldLabel>
+                              <Input
+                                id={field.name}
+                                name={field.name}
+                                type="datetime-local"
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                aria-invalid={isInvalid}
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                              />
+                              {isInvalid && (
+                                <FieldError errors={field.state.meta.errors} />
+                              )}
+                            </Field>
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
 
-                  {/* Registration Fee */}
-                  <form.Field
-                    name="registration_fee"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Registration Fee
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            placeholder="0.00"
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                  {/* Capacity & Fee Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <DollarSign className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Capacity & Fees</h3>
+                    </div>
 
-                  {/* Image URL */}
-                  <form.Field
-                    name="image_url"
-                    children={(field) => {
-                      const isInvalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            Image URL
-                          </FieldLabel>
-                          <Input
-                            id={field.name}
-                            name={field.name}
-                            type="url"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            aria-invalid={isInvalid}
-                            placeholder="https://example.com/image.jpg"
-                          />
-                          {isInvalid && (
-                            <FieldError errors={field.state.meta.errors} />
-                          )}
-                        </Field>
-                      );
-                    }}
-                  />
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Capacity */}
+                      <form.Field
+                        name="capacity"
+                        children={(field) => {
+                          const isInvalid =
+                            field.state.meta.isTouched && !field.state.meta.isValid;
+                          return (
+                            <Field data-invalid={isInvalid}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Max Players *
+                              </FieldLabel>
+                              <Input
+                                id={field.name}
+                                name={field.name}
+                                type="number"
+                                min="1"
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                aria-invalid={isInvalid}
+                                placeholder="16"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                              />
+                              {isInvalid && (
+                                <FieldError errors={field.state.meta.errors} />
+                              )}
+                            </Field>
+                          );
+                        }}
+                      />
+
+                      {/* Registration Fee */}
+                      <form.Field
+                        name="registration_fee"
+                        children={(field) => {
+                          const isInvalid =
+                            field.state.meta.isTouched && !field.state.meta.isValid;
+                          return (
+                            <Field data-invalid={isInvalid}>
+                              <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Entry Fee (₹)
+                              </FieldLabel>
+                              <Input
+                                id={field.name}
+                                name={field.name}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                aria-invalid={isInvalid}
+                                placeholder="0 (Free)"
+                                className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                              />
+                              {isInvalid && (
+                                <FieldError errors={field.state.meta.errors} />
+                              )}
+                            </Field>
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Image URL Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Image className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Cover Image</h3>
+                    </div>
+
+                    <form.Field
+                      name="image_url"
+                      children={(field) => {
+                        const isInvalid =
+                          field.state.meta.isTouched && !field.state.meta.isValid;
+                        return (
+                          <Field data-invalid={isInvalid}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Image URL (Optional)
+                            </FieldLabel>
+                            <Input
+                              id={field.name}
+                              name={field.name}
+                              type="url"
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              aria-invalid={isInvalid}
+                              placeholder="https://example.com/image.jpg"
+                              className="h-11 rounded-xl bg-muted/40 border-transparent focus:bg-background focus:border-input"
+                            />
+                            <FieldDescription className="text-xs">
+                              Add a cover image URL for your tournament
+                            </FieldDescription>
+                            {isInvalid && (
+                              <FieldError errors={field.state.meta.errors} />
+                            )}
+                          </Field>
+                        );
+                      }}
+                    />
+                  </div>
                 </FieldGroup>
               </form>
             </CardContent>
-            <div className="px-6 pb-6">
-              <div className="flex gap-2">
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="fixed bottom-0 left-0 right-0 p-4 z-50 bg-gradient-to-t from-background via-background to-transparent pt-12 pointer-events-none">
+            <div className="max-w-md mx-auto w-full space-y-2 pointer-events-auto pb-4">
+              <div className="flex gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => form.reset()}
+                  className="rounded-xl font-bold"
                 >
                   Reset
                 </Button>
                 <Button
                   type="submit"
                   form="create-tournament-form"
-                  className="flex-1"
+                  className="flex-1 h-14 rounded-xl shadow-xl shadow-primary/25 text-lg font-black uppercase tracking-wide"
                   disabled={createMutation.isPending}
                 >
                   {createMutation.isPending
@@ -829,9 +1044,42 @@ export default function CreateTournamentPage() {
                 </Button>
               </div>
             </div>
-          </Card>
+          </div>
         </div>
       </ScrollablePageContent>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Tournament Creation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to create the tournament "{pendingSubmitData?.name}"? 
+              This action cannot be undone. Please review all details before confirming.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPendingSubmitData(null);
+              setShowConfirmDialog(false);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingSubmitData) {
+                  createMutation.mutate(pendingSubmitData);
+                  setShowConfirmDialog(false);
+                  setPendingSubmitData(null);
+                }
+              }}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? "Creating..." : "Create Tournament"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ScrollablePage>
   );
 }

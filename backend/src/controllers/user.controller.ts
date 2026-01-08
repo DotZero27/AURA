@@ -203,6 +203,7 @@ export async function getUserDetails(c: Context<AuthContext>) {
 
           return {
             match_id: match.id,
+            tournament_id: match.tournament_id,
             tournament_name: tournamentMap.get(match.tournament_id) || "",
             round: match.round,
             status: match.status,

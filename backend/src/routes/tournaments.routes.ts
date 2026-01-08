@@ -9,6 +9,11 @@ import {
   createTournamentSchema,
   addTournamentRefereeSchema,
   removeTournamentRefereeSchema,
+  initializeGroupsSchema,
+  swapTeamGroupSchema,
+  setMatchWinnerSchema,
+  engineMatchIdSchema,
+  engineMatchFilterSchema,
 } from "@/utils/validation";
 import {
   getAllTournaments,
@@ -26,12 +31,38 @@ import {
   getRegisteredTournaments,
   addTournamentReferee,
   removeTournamentReferee,
+  // Tournament Engine controllers
+  getEngineInfo,
+  getEngineStandings,
+  getEngineTeams,
+  getEngineMatches,
+  getEngineNextAction,
+  engineInitializeGroups,
+  engineStartNextRound,
+  engineSwapTeam,
+  engineReset,
+  engineSetAllWinners,
+  engineSetMatchWinner,
 } from "@/controllers/tournaments.controller";
 import {
   getTournamentRegistrations,
   registerForTournament,
 } from "@/controllers/registrations.controller";
-import { createRegistrationSchema } from "@/utils/validation";
+import {
+  inviteToTournament,
+  generateShareableLink,
+  getInviteByToken,
+  acceptInviteByToken,
+  updateTournamentInvite,
+  getTournamentInvites,
+} from "@/controllers/tournamentInvites.controller";
+import {
+  createRegistrationSchema,
+  createTournamentInviteSchema,
+  tournamentInviteTokenSchema,
+  tournamentInviteIdSchema,
+  updateTournamentInviteSchema,
+} from "@/utils/validation";
 
 export const tournamentsRoutes = new Hono<AuthContext>();
 
@@ -62,6 +93,14 @@ tournamentsRoutes.get(
   "/registered",
   authMiddleware,
   getRegisteredTournaments
+);
+
+// GET /tournaments/invites/:token - Get invite details by token (PUBLIC - no auth required)
+// IMPORTANT: This must come before /:id to avoid route conflicts
+tournamentsRoutes.get(
+  "/invites/:token",
+  zValidator("param", tournamentInviteTokenSchema),
+  getInviteByToken
 );
 
 // GET /tournaments - Get all tournaments with filtering
@@ -105,7 +144,114 @@ tournamentsRoutes.get(
   getCurrentRoundMatches
 );
 
+// GET /tournaments/:id/invites - Get all invites for a tournament
+// IMPORTANT: This must come before /:id/:round to avoid route conflicts
+tournamentsRoutes.get(
+  "/:id/invites",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getTournamentInvites
+);
+
+// ============================================================================
+// TOURNAMENT ENGINE ROUTES (Group + Knockout Format)
+// IMPORTANT: These must come before /:id/:round to avoid route conflicts
+// ============================================================================
+
+// GET /tournaments/:id/engine/info - Get tournament engine info
+tournamentsRoutes.get(
+  "/:id/engine/info",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getEngineInfo
+);
+
+// GET /tournaments/:id/engine/standings - Get group standings
+tournamentsRoutes.get(
+  "/:id/engine/standings",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getEngineStandings
+);
+
+// GET /tournaments/:id/engine/teams - Get registered teams with group assignments
+tournamentsRoutes.get(
+  "/:id/engine/teams",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getEngineTeams
+);
+
+// GET /tournaments/:id/engine/matches - Get all matches (optional filter by round/status)
+tournamentsRoutes.get(
+  "/:id/engine/matches",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("query", engineMatchFilterSchema.partial()),
+  getEngineMatches
+);
+
+// GET /tournaments/:id/engine/next-action - Get next action needed
+tournamentsRoutes.get(
+  "/:id/engine/next-action",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  getEngineNextAction
+);
+
+// POST /tournaments/:id/engine/initialize - Initialize groups (host only)
+tournamentsRoutes.post(
+  "/:id/engine/initialize",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", initializeGroupsSchema),
+  engineInitializeGroups
+);
+
+// POST /tournaments/:id/engine/next-round - Start next round (host only)
+tournamentsRoutes.post(
+  "/:id/engine/next-round",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  engineStartNextRound
+);
+
+// POST /tournaments/:id/engine/swap-team - Swap team between groups (host only)
+tournamentsRoutes.post(
+  "/:id/engine/swap-team",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", swapTeamGroupSchema),
+  engineSwapTeam
+);
+
+// POST /tournaments/:id/engine/reset - Reset tournament (host only)
+tournamentsRoutes.post(
+  "/:id/engine/reset",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  engineReset
+);
+
+// POST /tournaments/:id/engine/set-all-winners - Set all pending matches with Team 1 as winner (testing)
+tournamentsRoutes.post(
+  "/:id/engine/set-all-winners",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  engineSetAllWinners
+);
+
+// POST /tournaments/engine/match/:matchId/winner - Set match winner
+tournamentsRoutes.post(
+  "/engine/match/:matchId/winner",
+  authMiddleware,
+  zValidator("param", engineMatchIdSchema),
+  zValidator("json", setMatchWinnerSchema),
+  engineSetMatchWinner
+);
+
 // GET /tournaments/:id/:round - Get tournament round details
+// IMPORTANT: This MUST come AFTER all /engine/* routes to avoid conflicts
 tournamentsRoutes.get(
   "/:id/:round",
   authMiddleware,
@@ -170,3 +316,39 @@ tournamentsRoutes.delete(
   zValidator("param", removeTournamentRefereeSchema),
   removeTournamentReferee
 );
+
+// POST /tournaments/:id/invite - Invite friend to tournament team
+tournamentsRoutes.post(
+  "/:id/invite",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", createTournamentInviteSchema),
+  inviteToTournament
+);
+
+// POST /tournaments/:id/invite/link - Generate shareable invite link
+tournamentsRoutes.post(
+  "/:id/invite/link",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  zValidator("json", createTournamentInviteSchema.partial()),
+  generateShareableLink
+);
+
+// POST /tournaments/invites/:token/accept - Accept invite via token (for new users)
+tournamentsRoutes.post(
+  "/invites/:token/accept",
+  authMiddleware,
+  zValidator("param", tournamentInviteTokenSchema),
+  acceptInviteByToken
+);
+
+// PUT /tournaments/invites/:id - Accept/reject invite (for platform users)
+tournamentsRoutes.put(
+  "/invites/:id",
+  authMiddleware,
+  zValidator("param", tournamentInviteIdSchema),
+  zValidator("json", updateTournamentInviteSchema),
+  updateTournamentInvite
+);
+

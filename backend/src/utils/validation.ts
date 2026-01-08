@@ -89,6 +89,7 @@ export const registrationIdSchema = z.object({
 
 export const createRegistrationSchema = z.object({
   tournament_id: z.number().int().positive(),
+  team_id: z.number().int().positive().optional(),
   txn_id: z.string().uuid().optional(),
 });
 
@@ -235,5 +236,73 @@ export const createTournamentSchema = z.object({
   registration_fee: z.number().nonnegative().default(0),
   image_url: z.string().url().optional().or(z.literal("")),
   metadata: z.record(z.string(), z.any()).optional(),
+});
+
+// Friends schemas
+export const friendIdSchema = z.object({
+  id: z.string().min(1, "Friend ID is required"),
+});
+
+export const createFriendRequestSchema = z.object({
+  friend_id: z.number().int().positive(),
+});
+
+export const updateFriendRequestSchema = z.object({
+  status: z.enum(["accepted", "rejected", "blocked"]),
+});
+
+// Tournament invite schemas
+export const tournamentInviteIdSchema = z.object({
+  id: z.string().min(1, "Invite ID is required"),
+});
+
+export const tournamentInviteTokenSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+});
+
+export const createTournamentInviteSchema = z.object({
+  invitee_id: z.number().int().positive().optional(),
+  team_id: z.number().int().positive().optional(),
+});
+
+export const updateTournamentInviteSchema = z.object({
+  status: z.enum(["accepted", "rejected"]),
+});
+
+// Notification schemas
+export const notificationIdSchema = z.object({
+  id: z.string().min(1, "Notification ID is required"),
+});
+
+// ============================================================================
+// TOURNAMENT ENGINE SCHEMAS (Group + Knockout Format)
+// ============================================================================
+
+// Initialize groups schema
+export const initializeGroupsSchema = z.object({
+  numberOfGroups: z.enum(["2", "4", "8"]).transform(val => parseInt(val) as 2 | 4 | 8),
+});
+
+// Swap team between groups schema
+export const swapTeamGroupSchema = z.object({
+  teamId: z.number().int().positive(),
+  fromGroup: z.string().min(1, "From group is required").max(1),
+  toGroup: z.string().min(1, "To group is required").max(1),
+});
+
+// Set match winner schema
+export const setMatchWinnerSchema = z.object({
+  winnerTeamId: z.number().int().positive(),
+});
+
+// Match ID param for engine
+export const engineMatchIdSchema = z.object({
+  matchId: z.string().min(1, "Match ID is required"),
+});
+
+// Engine match filter query
+export const engineMatchFilterSchema = z.object({
+  round: z.string().optional(),
+  status: z.enum(["scheduled", "completed"]).optional(),
 });
 

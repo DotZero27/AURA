@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Users, Trophy, Zap } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 
 export function TournamentCard({ tournament, index }) {
@@ -27,7 +27,6 @@ export function TournamentCard({ tournament, index }) {
     match_format,
   } = tournament;
 
-  // Helper function to check if tournament is live
   const isTournamentLive = () => {
     if (!start_date || !end_date) return false;
     const now = new Date();
@@ -36,16 +35,18 @@ export function TournamentCard({ tournament, index }) {
     return now >= startTime && now <= endTime;
   };
 
-  // Determine registration status
   const getStatusBadge = () => {
     if (isTournamentLive()) {
-      return <Badge className="bg-red-100 text-red-700 animate-pulse">LIVE</Badge>;
+      return (
+        <Badge className="bg-destructive/10 text-destructive border-destructive/20 animate-pulse gap-1">
+          <Zap className="size-3 fill-destructive" /> LIVE
+        </Badge>
+      );
     }
     if (registered) {
-      return <Badge className="bg-green-100 text-green-700">REGISTERED</Badge>;
+      return <Badge className="bg-brand-green/20 text-brand-green-dark border-brand-green/30">REGISTERED</Badge>;
     }
-    // You might want to add logic for CLOSED/OPEN based on capacity
-    return <Badge className="bg-blue-100 text-blue-700">OPEN</Badge>;
+    return <Badge variant="outline" className="border-primary/20 text-primary bg-primary/5">OPEN</Badge>;
   };
 
   const categoryLabel =
@@ -55,74 +56,82 @@ export function TournamentCard({ tournament, index }) {
       ? "Women's Doubles"
       : "Mixed Doubles";
 
-  // Calculate registered count (from backend or default to 0)
   const registeredCount = tournament.registered_count || 0;
   const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15, delay: index * 0.1 }}
+      transition={{ duration: 0.3, delay: index * 0.1, ease: "easeOut" }}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
     >
       <Link href={`/tournaments/${id}`}>
-        <Card className="overflow-hidden mb-4 py-0 gap-0">
-          <div className="flex flex-row gap-0">
-            {/* Image placeholder */}
-            <div className="size-32 bg-gray-200 relative shrink-0">
-              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
-                {categoryLabel}
-              </div>
-              {getStatusBadge() && (
-                <div className="absolute top-1 right-1">{getStatusBadge()}</div>
-              )}
+        <Card className="py-0 overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-primary/10 group">
+          <div className="flex flex-col sm:flex-row">
+            {/* Artistic Placeholder / Image Area */}
+            <div className="h-32 sm:h-auto sm:w-32 bg-linear-to-br from-brand-blue to-teal-600 relative shrink-0 flex items-center justify-center overflow-hidden">
+               {/* Pattern overlay */}
+               <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-white to-transparent" />
+               <Trophy className="text-white/30 size-12 transform -rotate-12 group-hover:scale-110 transition-transform duration-500" />
+               
+               <div className="absolute bottom-0 inset-x-0 bg-black/40 backdrop-blur-[2px] p-1 text-center">
+                 <span className="text-[10px] font-black text-white uppercase tracking-wider">{categoryLabel}</span>
+               </div>
             </div>
-            {/* Content */}
-            <CardContent className="flex-1 p-3 space-y-1">
-              <CardHeader className="p-0 gap-1">
-                <CardTitle className="text-sm font-semibold">{name}</CardTitle>
 
-                <div className="flex items-center text-xs text-gray-600 gap-2">
-                  <span>Pickleball</span>
-                </div>
-              </CardHeader>
-
-              <div className="flex items-center text-xs text-gray-600 gap-2">
-                <Calendar className="size-3" />
-                <span>{formatDate(start_date)}</span>
-              </div>
-
-              <div className="flex items-center text-xs text-gray-600 gap-2">
-                <Clock className="size-3" />
-                <span>
-                  {formatTime(start_date)} - {formatTime(end_date)}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="text-purple-600 font-semibold text-sm">
-                  {registration_fee > 0 ? `${registration_fee} Rs` : "Free"}
+            <div className="flex-1 flex flex-col justify-between">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg font-black tracking-tight line-clamp-1 group-hover:text-primary transition-colors uppercase italic">
+                      {name}
+                    </CardTitle>
+                    <div className="flex items-center text-xs text-muted-foreground gap-1 font-medium">
+                       <MapPin className="size-3" />
+                       <span className="line-clamp-1">{venue?.name || venue?.address || "Location TBD"}</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {getStatusBadge()}
+                  </div>
                 </div>
 
-                <div className="flex items-center text-xs text-gray-600 gap-1">
-                  <MapPin className="size-3" />
-                  <span>{venue?.name || venue?.address || "Location TBD"}</span>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-lg border border-border/50">
+                    <CalendarDays className="size-3.5 text-primary" />
+                    <div className="flex flex-col">
+                      <span className="font-bold text-foreground uppercase">{formatDate(start_date)}</span>
+                      <span className="text-[10px] font-medium">Date</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-lg border border-border/50">
+                    <Clock className="size-3.5 text-primary" />
+                    <div className="flex flex-col">
+                      <span className="font-bold text-foreground uppercase">
+                        {formatTime(start_date)}
+                      </span>
+                      <span className="text-[10px] font-medium">Start Time</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
+              </CardContent>
+
+              <CardFooter className="p-4 pt-0 flex items-center justify-between gap-4">
+                 <div className="flex-1 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-muted-foreground flex items-center gap-1 uppercase tracking-wider text-[10px]">
+                        <Users className="size-3" /> {registeredCount}/{capacity} Teams
+                      </span>
+                      <span className="font-black text-primary text-sm">
+                        {registration_fee > 0 ? `₹${registration_fee}` : "Free"}
+                      </span>
+                    </div>
+                    <Progress value={Math.min(progress, 100)} className="h-1.5 bg-muted [&>div]:bg-linear-to-r [&>div]:from-brand-blue [&>div]:to-brand-green" />
+                 </div>
+              </CardFooter>
+            </div>
           </div>
-
-          <CardFooter className="flex items-center gap-2 p-3">
-            <Users className="size-6" />
-            {/* Progress bar */}
-            <Progress
-              value={Math.min(progress, 100)}
-              className="flex-1 h-2 bg-gray-200 [&>div]:bg-purple-600"
-            />
-            <span className="text-xs text-gray-600">
-              {registeredCount}/{capacity}
-            </span>
-          </CardFooter>
         </Card>
       </Link>
     </motion.div>

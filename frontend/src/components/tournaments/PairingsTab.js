@@ -225,60 +225,76 @@ export function PairingsTab({ pairingsByCourt, selectedRound, isLoading }) {
         return (
           <div 
             key={pairing.id} 
-            className="bg-white rounded-lg border cursor-pointer hover:border-purple-300 transition-colors"
+            className="bg-background rounded-xl border border-border/50 shadow-xs cursor-pointer hover:border-primary/50 transition-all duration-200 group overflow-hidden"
             onClick={() => {
               if (matchId && tournamentId) {
                 router.push(`/tournaments/${tournamentId}/${selectedRound}/${matchId}`);
               }
             }}
           >
-            <div className="flex items-center justify-between rounded-t-lg p-4 border-b bg-gray-50">
-              <h3 className="text-sm font-medium text-purple-600">
-                {selectedRound} Round • Court {pairing.court}
-              </h3>
+            <div className="flex items-center justify-between p-3 border-b border-border/50 bg-muted/20">
+              <div className="flex items-center gap-2">
+                 <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">{selectedRound}</span>
+                 <span className="text-xs font-medium text-muted-foreground/50">•</span>
+                 <span className="text-xs font-bold text-muted-foreground">Court {pairing.court}</span>
+              </div>
+              
               {isLive && (
-                <div className="flex items-center gap-1 text-green-600">
-                  <span className="size-2 bg-green-500 rounded-full" />
-                  <span className="text-sm font-medium">LIVE</span>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20">
+                  <span className="relative flex size-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full size-2 bg-red-500"></span>
+                  </span>
+                  <span className="text-[10px] font-black text-red-600 uppercase tracking-wider">LIVE</span>
                 </div>
               )}
               {isComplete && (
-                <span className="text-sm text-purple-600 font-medium">
-                  Complete
-                </span>
-              )}
-            </div>
-            <div className="space-y-2 px-4 py-2">
-              {/* Team A */}
-              {teamA.length > 0 && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="size-8 bg-linear-to-b from-white to-gray-300 rounded-full" />
-                    <span className="text-sm capitalize">
-                      {teamA.map((p) => formatPlayerName(p)).join(" & ")}
-                    </span>
-                  </div>
-                  {scores && scores.teamA !== null && scores.teamA !== undefined && (
-                    <div className="text-sm font-semibold text-purple-600">
-                      {scores.teamA}
-                    </div>
-                  )}
+                <div className="px-2 py-0.5 rounded-full bg-muted border border-border">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Final</span>
                 </div>
               )}
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {/* Team A */}
+              {teamA.length > 0 && (
+                <div className="flex items-center justify-between group/team">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="size-10 bg-linear-to-br from-brand-blue/20 to-brand-blue/5 rounded-full flex items-center justify-center border border-brand-blue/20 text-brand-blue font-black text-sm shrink-0">
+                        A
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold truncate group-hover/team:text-primary transition-colors">
+                          {teamA.map((p) => p.name || p.username).join(" & ")}
+                        </span>
+                        {/* Placeholder for player stats/record if available */}
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tabular-nums pl-4">
+                    {scores && scores.teamA !== null && scores.teamA !== undefined ? scores.teamA : "-"}
+                  </div>
+                </div>
+              )}
+              
+              {/* Divider */}
+              {hasTeamB && <div className="h-px bg-border/50 border-t border-dashed border-border/50 w-full" />}
+
               {/* Team B - only show if team B exists */}
               {hasTeamB && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="size-8 bg-linear-to-b from-white to-gray-300 rounded-full" />
-                    <span className="text-sm capitalize">
-                      {teamB.map((p) => formatPlayerName(p)).join(" & ")}
-                    </span>
-                  </div>
-                  {scores && scores.teamB !== null && scores.teamB !== undefined && (
-                    <div className="text-sm font-semibold text-purple-600">
-                      {scores.teamB}
+                <div className="flex items-center justify-between group/team">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="size-10 bg-linear-to-br from-brand-green/20 to-brand-green/5 rounded-full flex items-center justify-center border border-brand-green/20 text-brand-green font-black text-sm shrink-0">
+                        B
                     </div>
-                  )}
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold truncate group-hover/team:text-primary transition-colors">
+                          {teamB.map((p) => p.name || p.username).join(" & ")}
+                        </span>
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tabular-nums pl-4">
+                    {scores && scores.teamB !== null && scores.teamB !== undefined ? scores.teamB : "-"}
+                  </div>
                 </div>
               )}
             </div>

@@ -49,8 +49,38 @@ export const tournamentsApi = {
   },
 
   // POST /tournaments/:id/register - Register for a tournament
-  register: (id) => {
-    return apiClient.post(`/tournaments/${id}/register`, {});
+  register: (id, teamId = null) => {
+    return apiClient.post(`/tournaments/${id}/register`, teamId ? { team_id: teamId } : {});
+  },
+
+  // POST /tournaments/:id/invite - Invite friend to tournament team
+  invite: (id, data) => {
+    return apiClient.post(`/tournaments/${id}/invite`, data);
+  },
+
+  // POST /tournaments/:id/invite/link - Generate shareable invite link
+  generateInviteLink: (id, data = {}) => {
+    return apiClient.post(`/tournaments/${id}/invite/link`, data);
+  },
+
+  // GET /tournaments/invites/:token - Get invite details by token
+  getInviteByToken: (token) => {
+    return apiClient.get(`/tournaments/invites/${token}`);
+  },
+
+  // POST /tournaments/invites/:token/accept - Accept invite via token
+  acceptInviteByToken: (token) => {
+    return apiClient.post(`/tournaments/invites/${token}/accept`);
+  },
+
+  // PUT /tournaments/invites/:id - Accept/reject invite
+  updateInvite: (id, data) => {
+    return apiClient.put(`/tournaments/invites/${id}`, data);
+  },
+
+  // GET /tournaments/:id/invites - Get all invites for a tournament
+  getInvites: (id) => {
+    return apiClient.get(`/tournaments/${id}/invites`);
   },
 
   // GET /tournaments/hosted - Get tournaments hosted by current player
@@ -140,6 +170,11 @@ export const playersApi = {
   search: (query) => {
     return apiClient.get("/players/search", { params: { q: query } });
   },
+
+  // GET /players/:id - Get player by ID
+  getById: (id) => {
+    return apiClient.get(`/players/${id}`);
+  },
 };
 
 // User API
@@ -163,6 +198,115 @@ export const matchFormatsApi = {
   // GET /match-formats - Get all match formats
   getAll: () => {
     return apiClient.get('/match-formats');
+  },
+};
+
+// Friends API
+export const friendsApi = {
+  // GET /friends - Get user's friends list
+  getAll: () => {
+    return apiClient.get('/friends');
+  },
+
+  // GET /friends/pending - Get pending friend requests
+  getPending: () => {
+    return apiClient.get('/friends/pending');
+  },
+
+  // POST /friends - Send friend request
+  sendRequest: (friendId) => {
+    return apiClient.post('/friends', { friend_id: friendId });
+  },
+
+  // PUT /friends/:id - Accept/reject friend request
+  updateRequest: (id, status) => {
+    return apiClient.put(`/friends/${id}`, { status });
+  },
+
+  // DELETE /friends/:id - Remove friend or cancel request
+  remove: (id) => {
+    return apiClient.delete(`/friends/${id}`);
+  },
+};
+
+// Notifications API
+export const notificationsApi = {
+  // GET /notifications - Get all notifications for current user
+  getAll: (params = {}) => {
+    return apiClient.get('/notifications', { params });
+  },
+
+  // GET /notifications/unread-count - Get unread count
+  getUnreadCount: () => {
+    return apiClient.get('/notifications/unread-count');
+  },
+
+  // PUT /notifications/:id/read - Mark notification as read
+  markAsRead: (id) => {
+    return apiClient.put(`/notifications/${id}/read`);
+  },
+
+  // PUT /notifications/read-all - Mark all notifications as read
+  markAllAsRead: () => {
+    return apiClient.put('/notifications/read-all');
+  },
+};
+
+// Tournament Engine API (Group + Knockout Format)
+export const tournamentEngineApi = {
+  // GET /tournaments/:id/engine/info - Get tournament engine info
+  getInfo: (id) => {
+    return apiClient.get(`/tournaments/${id}/engine/info`);
+  },
+
+  // GET /tournaments/:id/engine/standings - Get group standings
+  getStandings: (id) => {
+    return apiClient.get(`/tournaments/${id}/engine/standings`);
+  },
+
+  // GET /tournaments/:id/engine/teams - Get registered teams with group assignments
+  getTeams: (id) => {
+    return apiClient.get(`/tournaments/${id}/engine/teams`);
+  },
+
+  // GET /tournaments/:id/engine/matches - Get all matches
+  getMatches: (id, filter = {}) => {
+    return apiClient.get(`/tournaments/${id}/engine/matches`, { params: filter });
+  },
+
+  // GET /tournaments/:id/engine/next-action - Get next action needed
+  getNextAction: (id) => {
+    return apiClient.get(`/tournaments/${id}/engine/next-action`);
+  },
+
+  // POST /tournaments/:id/engine/initialize - Initialize groups
+  initializeGroups: (id, numberOfGroups) => {
+    return apiClient.post(`/tournaments/${id}/engine/initialize`, { numberOfGroups: String(numberOfGroups) });
+  },
+
+  // POST /tournaments/:id/engine/next-round - Start next round
+  startNextRound: (id) => {
+    return apiClient.post(`/tournaments/${id}/engine/next-round`);
+  },
+
+  // POST /tournaments/:id/engine/swap-team - Swap team between groups
+  swapTeam: (id, teamId, fromGroup, toGroup) => {
+    return apiClient.post(`/tournaments/${id}/engine/swap-team`, { teamId, fromGroup, toGroup });
+  },
+
+  // POST /tournaments/:id/engine/reset - Reset tournament
+  reset: (id) => {
+    return apiClient.post(`/tournaments/${id}/engine/reset`);
+  },
+
+  // POST /tournaments/:id/engine/set-all-winners - Set all pending matches with Team 1 as winner (testing)
+  setAllWinners: (id) => {
+    return apiClient.post(`/tournaments/${id}/engine/set-all-winners`);
+  },
+
+  // POST /tournaments/engine/match/:matchId/winner - Set match winner
+  setMatchWinner: (matchId, winnerTeamId) => {
+    return apiClient.post(`/tournaments/engine/match/${matchId}/winner`, { winnerTeamId });
   },
 };
 

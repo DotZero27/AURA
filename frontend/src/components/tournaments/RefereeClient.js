@@ -22,6 +22,11 @@ import AddTeamDialog from "@/components/tournaments/AddTeamDialog";
 import ScoreDrawer from "@/components/tournaments/ScoreDrawer";
 import { faker } from "@faker-js/faker";
 import { cn } from "@/lib/utils";
+import {
+  ScrollablePage,
+  ScrollablePageHeader,
+  ScrollablePageContent,
+} from "@/components/layout/ScrollablePage";
 import { createWebSocketConnection } from "@/lib/websocket";
 
 export default function RefereeClient() {
@@ -442,509 +447,515 @@ export default function RefereeClient() {
   };
 
   return (
-    <div className="pb-16">
+    <ScrollablePage className="h-dvh bg-background">
       {/* Header */}
-      <header className="sticky top-0 bg-white border-b border-gray-200 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="size-5" />
-          </Button>
-          <h1 className="text-lg max-w-[256px] truncate font-bold">
-            {tournament_name}
-          </h1>
-          <Button variant="ghost" size="icon">
-            <MoreVertical className="size-5" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Score Section */}
-      <div className="p-4">
-        <div className=" flex items-center justify-center gap-3 mb-4">
-          <div className="relative bg-[#2ABF93] text-4xl font-bold py-4 px-12 rounded-lg text-center">
-            <span className="text-white">{currentScore}</span>
-            {isMatchStarted && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleStepBack}
-                disabled={undoMutation.isPending}
-                className="absolute top-1/2 -translate-y-1/2 -left-12"
-              >
-                <Undo2 className="size-5" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Match Completed Indicator */}
-        {matchEnded && (
-          <div className="mb-4 flex items-center justify-center">
-            <div className="px-4 py-2 bg-green-100 border-2 border-green-500 rounded-lg">
-              <div className="text-sm font-semibold text-green-800 text-center">
-                🏆 Match Completed
-              </div>
-              {winnerTeamIdFromData && (
-                <div className="text-xs text-green-700 text-center mt-1">
-                  {isTeamAWinner ? "Team A Wins!" : isTeamBWinner ? "Team B Wins!" : "Match Finished"}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Serving Team Indicator */}
-        {isMatchStarted && servingTeamId && !matchEnded && (
-          <div className="mb-4 flex items-center justify-center gap-2">
-            <div className="text-sm text-gray-600">Serving:</div>
-            <div
-              className={cn(
-                "px-3 py-1 rounded-full text-sm font-semibold",
-                isTeamAServing
-                  ? "bg-blue-100 text-blue-700"
-                  : isTeamBServing
-                  ? "bg-red-100 text-red-700"
-                  : "bg-gray-100 text-gray-700"
-              )}
-            >
-              {isTeamAServing
-                ? `Team A (Server ${serverSequence || ""})`
-                : isTeamBServing
-                ? `Team B (Server ${serverSequence || ""})`
-                : "Unknown"}
-            </div>
-          </div>
-        )}
-
-        {/* Start Match Button - Show when all positions assigned but match not started */}
-        {allPositionsAssigned && !isMatchStarted && (
-          <div className="mb-4 flex justify-center">
-            <Button
-              onClick={handleStartMatch}
-              disabled={startMatchMutation.isPending}
-              size="lg"
-              className="bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              <Play className="size-5 mr-2" />
-              {startMatchMutation.isPending ? "Starting Match..." : "Start Match"}
+      <ScrollablePageHeader className="pb-0 bg-transparent">
+        <header className="sticky top-0 z-20 backdrop-blur-xl bg-background/80 border-b border-border/40 supports-backdrop-filter:bg-background/60">
+          <div className="flex items-center justify-between px-4 py-3">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="size-5" />
+            </Button>
+            <h1 className="text-lg max-w-[256px] truncate font-bold text-center">
+              {tournament_name}
+            </h1>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="size-5" />
             </Button>
           </div>
-        )}
+        </header>
+      </ScrollablePageHeader>
 
-        {/* Court Layout - Complex Grid */}
-        <div className="mb-4">
-          <div
-            className={cn(
-              "grid gap-0.5 border",
-              teamAId &&
+      <ScrollablePageContent className="pb-24 pt-4 relative">
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110 pointer-events-none -z-10" />
+        <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none -z-10" />
+
+        {/* Score Section */}
+        <div className="p-4">
+          <div className=" flex items-center justify-center gap-3 mb-4">
+            <div className="relative bg-primary text-4xl font-black tabular-nums tracking-tighter py-4 px-12 rounded-2xl shadow-xl shadow-primary/20 text-center border-4 border-background ring-1 ring-border/20">
+              <span className="text-primary-foreground">{currentScore}</span>
+              {isMatchStarted && (
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={handleStepBack}
+                  disabled={undoMutation.isPending}
+                  className="absolute top-1/2 -translate-y-1/2 -left-14 rounded-full shadow-md bg-background hover:bg-muted border border-border"
+                >
+                  <Undo2 className="size-5 text-muted-foreground" />
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Match Completed Indicator */}
+          {matchEnded && (
+            <div className="mb-6 flex items-center justify-center">
+              <div className="px-6 py-2 bg-green-500/10 border border-green-500/20 rounded-full backdrop-blur-sm">
+                <div className="text-sm font-black text-green-600 text-center uppercase tracking-wide flex items-center gap-2">
+                  <span>🏆</span> Match Completed
+                </div>
+                {winnerTeamIdFromData && (
+                  <div className="text-xs font-bold text-green-700 text-center mt-1 uppercase tracking-wide">
+                    {isTeamAWinner ? "Team A Wins!" : isTeamBWinner ? "Team B Wins!" : "Match Finished"}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Serving Team Indicator */}
+          {isMatchStarted && servingTeamId && !matchEnded && (
+            <div className="mb-6 flex items-center justify-center gap-2">
+              <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Serving:</div>
+              <div
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border",
+                  isTeamAServing
+                    ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                    : isTeamBServing
+                    ? "bg-red-500/10 text-red-600 border-red-500/20"
+                    : "bg-muted text-muted-foreground border-border"
+                )}
+              >
+                {isTeamAServing
+                  ? `Team A ${serverSequence ? `• S${serverSequence}` : ""}`
+                  : isTeamBServing
+                  ? `Team B ${serverSequence ? `• S${serverSequence}` : ""}`
+                  : "Unknown"}
+              </div>
+            </div>
+          )}
+
+          {/* Start Match Button */}
+          {allPositionsAssigned && !isMatchStarted && (
+            <div className="mb-6 flex justify-center">
+              <Button
+                onClick={handleStartMatch}
+                disabled={startMatchMutation.isPending}
+                size="lg"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/25 px-8 h-12"
+              >
+                <Play className="size-5 mr-2 fill-current" />
+                {startMatchMutation.isPending ? "Starting Match..." : "Start Match"}
+              </Button>
+            </div>
+          )}
+
+          {/* Court Layout - Complex Grid */}
+          <div className="mb-6">
+            <div
+              className={cn(
+                "grid gap-1 border-4 border-muted/30 rounded-xl overflow-hidden shadow-sm bg-muted/10",
+                teamAId &&
+                  teamBId &&
+                  teamA.length > 0 &&
+                  teamB.length > 0 &&
+                  isTeamAssigned("left") &&
+                  isTeamAssigned("right")
+                  ? "grid-cols-5"
+                  : "grid-cols-3"
+              )}
+            >
+              {/* Left Dark Green Rectangle (Serve/Score Area) */}
+              {teamAId &&
                 teamBId &&
                 teamA.length > 0 &&
                 teamB.length > 0 &&
                 isTeamAssigned("left") &&
-                isTeamAssigned("right")
-                ? "grid-cols-5"
-                : "grid-cols-3"
-            )}
-          >
-            {/* Left Dark Green Rectangle */}
-            {teamAId &&
-              teamBId &&
-              teamA.length > 0 &&
-              teamB.length > 0 &&
-              isTeamAssigned("left") &&
-              isTeamAssigned("right") && (
-                <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
-                  {matchEnded ? (
-                    // Show winner information when match is completed
-                    <div className="flex flex-col items-center gap-2 px-4">
-                      {isTeamAWinner ? (
-                        <>
-                          <div className="text-white text-lg font-bold bg-yellow-500 px-3 py-1 rounded">
-                            🏆 WINNER
-                          </div>
-                          <div className="text-white text-sm font-semibold text-center">
+                isTeamAssigned("right") && (
+                  <div className="col-span-1 bg-linear-to-b from-brand-blue/20 to-brand-blue/5 flex flex-col items-center justify-center min-h-[200px] gap-2 border-r border-dashed border-brand-blue/20">
+                    {matchEnded ? (
+                      <div className="flex flex-col items-center gap-2 px-4">
+                        {isTeamAWinner ? (
+                          <>
+                            <div className="text-xs font-black bg-yellow-500 text-white px-2 py-0.5 rounded shadow-sm">
+                              WINNER
+                            </div>
+                            <div className="text-xs font-bold text-center text-brand-blue uppercase">
+                              Team A
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs font-medium text-center text-muted-foreground opacity-50">
                             Team A
                           </div>
-                        </>
-                      ) : (
-                        <div className="text-white text-sm text-center opacity-75">
-                          Team A
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {isTeamAServing && (
-                        <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
-                          SERVING
-                        </div>
-                      )}
-                      {teamAId ? (
-                        <ScoreDrawer
-                          isLoading={recordPointMutation.isPending}
-                          teamId={teamAId}
-                          teamName="Team A"
-                          currentScore={teamAScore}
-                          onConfirm={handleScoreUpdate}
-                          trigger={
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {isTeamAServing && (
+                          <div className="text-[10px] font-black bg-brand-blue text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
+                            SERVING
+                          </div>
+                        )}
+                        {teamAId ? (
+                          <ScoreDrawer
+                            isLoading={recordPointMutation.isPending}
+                            teamId={teamAId}
+                            teamName="Team A"
+                            currentScore={teamAScore}
+                            onConfirm={handleScoreUpdate}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={matchEnded}
+                                className={cn(
+                                  "size-12 rounded-full shadow-lg transition-all duration-200",
+                                  isTeamAServing 
+                                    ? "bg-brand-blue text-white hover:bg-brand-blue/90 hover:scale-110 ring-4 ring-brand-blue/20" 
+                                    : "bg-background text-muted-foreground hover:text-brand-blue border-2 border-border",
+                                  matchEnded && "opacity-50 cursor-not-allowed"
+                                )}
+                              >
+                                <Plus className="size-6" />
+                              </Button>
+                            }
+                          />
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-12 rounded-full bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                            disabled
+                          >
+                            <Plus className="size-6" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+              {/* Center Grid (Court Positions) */}
+              <div className="col-span-3 relative bg-background">
+                {/* Team Swap Button */}
+                {(isTeamAssigned("left") || isTeamAssigned("right")) && !isMatchStarted && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={handleTeamSwap}
+                      title="Swap Teams"
+                      className="size-8 rounded-full shadow-md border border-border bg-background hover:bg-muted"
+                    >
+                      <ArrowLeftRight className="size-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-px bg-border/20 min-h-[200px]">
+                  {/* Left Side - Team A Positions */}
+                  <div className="flex flex-col bg-background">
+                    {!isTeamAssigned("left") ? (
+                      <div className="flex items-center justify-center min-h-[200px] p-2">
+                        {isTeamAssigned("right") &&
+                        !hasOtherTeamEnoughPlayers("right") ? (
+                          <div className="text-center text-xs font-medium text-muted-foreground px-4">
+                            No players available
+                          </div>
+                        ) : (
+                          <AddTeamDialog
+                            teamA={teamA}
+                            teamB={teamB}
+                            onSelectTeam={handleTeamAssign}
+                            side="left"
+                            currentPositions={positions}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {/* Top - pos1 */}
+                        <div className="flex-1 flex flex-col items-center justify-center border-b border-dashed border-border/50 p-2 relative group hover:bg-muted/5 transition-colors">
+                          {!isMatchStarted && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              disabled={matchEnded}
-                              className={cn(
-                                "text-white bg-[#ABD1C4] rounded-full",
-                                isTeamAServing && "ring-2 ring-blue-500 ring-offset-2",
-                                matchEnded && "opacity-50 cursor-not-allowed"
-                              )}
+                              className="z-10 absolute -bottom-4 left-1/2 -translate-x-1/2 size-7 rounded-full bg-background border border-border shadow-sm hover:bg-muted"
+                              onClick={() => handleSwap("left")}
+                              title="Swap positions"
                             >
-                              <Plus className="size-6 text-gray-800" />
+                              <ArrowUpDown className="size-3 text-muted-foreground" />
                             </Button>
-                          }
-                        />
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-white bg-[#ABD1C4] rounded-full"
-                          disabled
-                        >
-                          <Plus className="size-6 text-gray-800" />
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                          )}
+                          <div className="flex flex-col items-center gap-2 w-full">
+                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
+                              <User className="size-6 text-muted-foreground" />
+                            </div>
+                            <span className="text-xs font-bold text-center truncate w-full px-1">
+                              {getPlayerById(positions.pos1)?.name ||
+                                getPlayerById(positions.pos1)?.username ||
+                                "Player"}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Bottom - pos2 */}
+                        <div className="flex-1 flex flex-col items-center justify-center p-2 relative group hover:bg-muted/5 transition-colors">
+                          <div className="flex flex-col items-center gap-2 w-full">
+                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
+                              <User className="size-6 text-muted-foreground" />
+                            </div>
+                            <span className="text-xs font-bold text-center truncate w-full px-1">
+                              {getPlayerById(positions.pos2)?.name ||
+                                getPlayerById(positions.pos2)?.username ||
+                                "Player"}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-            {/* Center Grid */}
-            <div className="col-span-3 relative">
-              {/* Team Swap Button - Only enabled before match starts */}
-              {(isTeamAssigned("left") || isTeamAssigned("right")) && !isMatchStarted && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleTeamSwap}
-                    title="Swap Teams"
-                    className="bg-gray-200 hover:bg-gray-300"
-                  >
-                    <ArrowLeftRight className="text-gray-600" />
-                  </Button>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-0.5 bg-white min-h-[200px]">
-                {/* Left Side - Team A */}
-                <div className="flex flex-col border-r">
-                  {!isTeamAssigned("left") ? (
-                    // Show single tile for team selection
-                    <div className="flex items-center justify-center min-h-[200px] p-2">
-                      {isTeamAssigned("right") &&
-                      !hasOtherTeamEnoughPlayers("right") ? (
-                        <div className="text-center text-sm text-gray-500 px-4">
-                          No players yet
-                        </div>
-                      ) : (
-                        <AddTeamDialog
-                          teamA={teamA}
-                          teamB={teamB}
-                          onSelectTeam={handleTeamAssign}
-                          side="left"
-                          currentPositions={positions}
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    // Show 2 tiles with swap button
-                    <>
-                      {/* Top - pos1 */}
-                      <div className="py-8 flex flex-col items-center justify-center min-h-[100px] border-b p-2 relative">
-                        {!isMatchStarted && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
-                            onClick={() => handleSwap("left")}
-                            title="Swap positions within team"
-                          >
-                            <ArrowUpDown className="text-gray-600" />
-                          </Button>
+                  {/* Right Side - Team B Positions */}
+                  <div className="flex flex-col bg-background">
+                    {!isTeamAssigned("right") ? (
+                      <div className="flex items-center justify-center min-h-[200px] p-2">
+                        {isTeamAssigned("left") &&
+                        !hasOtherTeamEnoughPlayers("left") ? (
+                          <div className="text-center text-xs font-medium text-muted-foreground px-4">
+                            No players available
+                          </div>
+                        ) : (
+                          <AddTeamDialog
+                            teamA={teamA}
+                            teamB={teamB}
+                            onSelectTeam={handleTeamAssign}
+                            side="right"
+                            currentPositions={positions}
+                          />
                         )}
-                        <div className="flex flex-col items-center gap-1 w-full">
-                          <div className="relative group">
-                            <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
-                              <User className="size-6 text-gray-600" />
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-center truncate w-full">
-                            {getPlayerById(positions.pos1)?.name ||
-                              getPlayerById(positions.pos1)?.username ||
-                              "Player"}
-                          </span>
-                        </div>
                       </div>
-                      {/* Bottom - pos2 */}
-                      <div className="py-8 flex flex-col items-center justify-center min-h-[100px] p-2 relative">
-                        <div className="flex flex-col items-center gap-1 w-full">
-                          <div className="relative group">
-                            <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
-                              <User className="size-6 text-gray-600" />
+                    ) : (
+                      <>
+                        {/* Top - pos3 */}
+                        <div className="flex-1 flex flex-col items-center justify-center border-b border-dashed border-border/50 p-2 relative group hover:bg-muted/5 transition-colors">
+                          {!isMatchStarted && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="z-10 absolute -bottom-4 left-1/2 -translate-x-1/2 size-7 rounded-full bg-background border border-border shadow-sm hover:bg-muted"
+                              onClick={() => handleSwap("right")}
+                              title="Swap positions"
+                            >
+                              <ArrowUpDown className="size-3 text-muted-foreground" />
+                            </Button>
+                          )}
+                          <div className="flex flex-col items-center gap-2 w-full">
+                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
+                              <User className="size-6 text-muted-foreground" />
                             </div>
+                            <span className="text-xs font-bold text-center truncate w-full px-1">
+                              {getPlayerById(positions.pos3)?.name ||
+                                getPlayerById(positions.pos3)?.username ||
+                                "Player"}
+                            </span>
                           </div>
-                          <span className="text-xs font-medium text-center truncate w-full">
-                            {getPlayerById(positions.pos2)?.name ||
-                              getPlayerById(positions.pos2)?.username ||
-                              "Player"}
-                          </span>
                         </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Right Side - Team B */}
-                <div className="flex flex-col">
-                  {!isTeamAssigned("right") ? (
-                    // Show single tile for team selection
-                    <div className="flex items-center justify-center min-h-[200px] p-2">
-                      {isTeamAssigned("left") &&
-                      !hasOtherTeamEnoughPlayers("left") ? (
-                        <div className="text-center text-sm text-gray-500 px-4">
-                          No players yet
-                        </div>
-                      ) : (
-                        <AddTeamDialog
-                          teamA={teamA}
-                          teamB={teamB}
-                          onSelectTeam={handleTeamAssign}
-                          side="right"
-                          currentPositions={positions}
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    // Show 2 tiles with swap button
-                    <>
-                      {/* Top - pos3 */}
-                      <div className="py-8 flex flex-col items-center justify-center min-h-[100px] border-b p-2 relative">
-                        {!isMatchStarted && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="z-10 absolute -bottom-5 left-1/2 -translate-x-1/2 bg-gray-200 hover:bg-gray-300 rounded-full"
-                            onClick={() => handleSwap("right")}
-                            title="Swap positions within team"
-                          >
-                            <ArrowUpDown className="text-gray-600" />
-                          </Button>
-                        )}
-                        <div className="flex flex-col items-center gap-1 w-full">
-                          <div className="relative group">
-                            <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
-                              <User className="size-6 text-gray-600" />
+                        {/* Bottom - pos4 */}
+                        <div className="flex-1 flex flex-col items-center justify-center p-2 relative group hover:bg-muted/5 transition-colors">
+                          <div className="flex flex-col items-center gap-2 w-full">
+                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
+                              <User className="size-6 text-muted-foreground" />
                             </div>
+                            <span className="text-xs font-bold text-center truncate w-full px-1">
+                              {getPlayerById(positions.pos4)?.name ||
+                                getPlayerById(positions.pos4)?.username ||
+                                "Player"}
+                            </span>
                           </div>
-                          <span className="text-xs font-medium text-center truncate w-full">
-                            {getPlayerById(positions.pos3)?.name ||
-                              getPlayerById(positions.pos3)?.username ||
-                              "Player"}
-                          </span>
                         </div>
-                      </div>
-                      {/* Bottom - pos4 */}
-                      <div className="py-8 flex flex-col items-center justify-center min-h-[100px] p-2 relative">
-                        <div className="flex flex-col items-center gap-1 w-full">
-                          <div className="relative group">
-                            <div className="size-12 bg-[#DBEAE5] rounded-full flex items-center justify-center">
-                              <User className="size-6 text-gray-600" />
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-center truncate w-full">
-                            {getPlayerById(positions.pos4)?.name ||
-                              getPlayerById(positions.pos4)?.username ||
-                              "Player"}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Right Dark Green Rectangle */}
-            {teamAId &&
-              teamBId &&
-              teamA.length > 0 &&
-              teamB.length > 0 &&
-              isTeamAssigned("left") &&
-              isTeamAssigned("right") && (
-                <div className="col-span-1 bg-[#3E7D68] flex flex-col items-center justify-center min-h-[200px] gap-2">
-                  {matchEnded ? (
-                    // Show winner information when match is completed
-                    <div className="flex flex-col items-center gap-2 px-4">
-                      {isTeamBWinner ? (
-                        <>
-                          <div className="text-white text-lg font-bold bg-yellow-500 px-3 py-1 rounded">
-                            🏆 WINNER
-                          </div>
-                          <div className="text-white text-sm font-semibold text-center">
+              {/* Right Dark Green Rectangle (Serve/Score Area) */}
+              {teamAId &&
+                teamBId &&
+                teamA.length > 0 &&
+                teamB.length > 0 &&
+                isTeamAssigned("left") &&
+                isTeamAssigned("right") && (
+                  <div className="col-span-1 bg-linear-to-b from-brand-green/20 to-brand-green/5 flex flex-col items-center justify-center min-h-[200px] gap-2 border-l border-dashed border-brand-green/20">
+                    {matchEnded ? (
+                      <div className="flex flex-col items-center gap-2 px-4">
+                        {isTeamBWinner ? (
+                          <>
+                            <div className="text-xs font-black bg-yellow-500 text-white px-2 py-0.5 rounded shadow-sm">
+                              WINNER
+                            </div>
+                            <div className="text-xs font-bold text-center text-brand-green uppercase">
+                              Team B
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs font-medium text-center text-muted-foreground opacity-50">
                             Team B
                           </div>
-                        </>
-                      ) : (
-                        <div className="text-white text-sm text-center opacity-75">
-                          Team B
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {isTeamBServing && (
-                        <div className="text-white text-xs font-semibold bg-blue-600 px-2 py-1 rounded">
-                          SERVING
-                        </div>
-                      )}
-                      {teamBId ? (
-                        <ScoreDrawer
-                          isLoading={recordPointMutation.isPending}
-                          teamId={teamBId}
-                          teamName="Team B"
-                          currentScore={teamBScore}
-                          onConfirm={handleScoreUpdate}
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={matchEnded}
-                              className={cn(
-                                "text-white bg-[#ABD1C4] rounded-full",
-                                isTeamBServing && "ring-2 ring-blue-500 ring-offset-2",
-                                matchEnded && "opacity-50 cursor-not-allowed"
-                              )}
-                            >
-                              <Plus className="size-6 text-gray-800" />
-                            </Button>
-                          }
-                        />
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-white bg-[#ABD1C4] rounded-full"
-                          disabled
-                        >
-                          <Plus className="size-6 text-gray-800" />
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {isTeamBServing && (
+                          <div className="text-[10px] font-black bg-brand-green text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
+                            SERVING
+                          </div>
+                        )}
+                        {teamBId ? (
+                          <ScoreDrawer
+                            isLoading={recordPointMutation.isPending}
+                            teamId={teamBId}
+                            teamName="Team B"
+                            currentScore={teamBScore}
+                            onConfirm={handleScoreUpdate}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={matchEnded}
+                                className={cn(
+                                  "size-12 rounded-full shadow-lg transition-all duration-200",
+                                  isTeamBServing 
+                                    ? "bg-brand-green text-white hover:bg-brand-green/90 hover:scale-110 ring-4 ring-brand-green/20" 
+                                    : "bg-background text-muted-foreground hover:text-brand-green border-2 border-border",
+                                  matchEnded && "opacity-50 cursor-not-allowed"
+                                )}
+                              >
+                                <Plus className="size-6" />
+                              </Button>
+                            }
+                          />
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-12 rounded-full bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                            disabled
+                          >
+                            <Plus className="size-6" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+            </div>
           </div>
-        </div>
 
-        {/* Player Icon */}
-        <div className="flex justify-center mb-4">
-          <div className="text-center">
-            <User className="size-8 text-gray-500" />
-            <span className="text-xs font-medium text-center truncate w-full">
-              You
-            </span>
+          {/* Viewer Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+              <User className="size-6 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                You (Referee)
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Match Details */}
-        <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-          <div className="border-r border-gray-200">
-            <div className="text-xs text-gray-600 mb-1">ROUND</div>
-            <div className="font-semibold">{round}</div>
+          {/* Match Details */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="bg-muted/30 rounded-xl p-3 border border-border/50 text-center">
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1">Round</div>
+              <div className="font-bold text-sm">{round}</div>
+            </div>
+            <div className="bg-muted/30 rounded-xl p-3 border border-border/50 text-center">
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1">Court</div>
+              <div className="font-bold text-sm">{court}</div>
+            </div>
+            <div className="bg-muted/30 rounded-xl p-3 border border-border/50 text-center">
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1">Viewer</div>
+              <div className="font-bold text-sm">3</div>
+            </div>
           </div>
-          <div className="border-r border-gray-200">
-            <div className="text-xs text-gray-600 mb-1">COURT</div>
-            <div className="font-semibold">{court}</div>
-          </div>
+
+          {/* Teams Section */}
           <div>
-            <div className="text-xs text-gray-600 mb-1">VIEWER</div>
-            <div className="font-semibold">3</div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">Team Rosters</h3>
+            </div>
+
+            <Tabs defaultValue="right" className="w-full">
+              <TabsList className="w-full h-10 p-1 bg-muted/30 rounded-lg grid grid-cols-2 mb-4">
+                <TabsTrigger value="left" className="rounded-md text-xs font-bold uppercase data-[state=active]:bg-background data-[state=active]:text-foreground transition-all">Left Side</TabsTrigger>
+                <TabsTrigger value="right" className="rounded-md text-xs font-bold uppercase data-[state=active]:bg-background data-[state=active]:text-foreground transition-all">Right Side</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="left" className="space-y-2 mt-0">
+                {isTeamAssigned("left") ? (
+                  <>
+                    {positions.pos1 && (
+                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
+                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                            <User className="size-4 text-muted-foreground" />
+                        </div>
+                        <span className="font-bold text-sm">
+                          {getPlayerById(positions.pos1)?.name ||
+                            getPlayerById(positions.pos1)?.username ||
+                            "Player"}
+                        </span>
+                      </div>
+                    )}
+                    {positions.pos2 && (
+                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
+                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                            <User className="size-4 text-muted-foreground" />
+                        </div>
+                        <span className="font-bold text-sm">
+                          {getPlayerById(positions.pos2)?.name ||
+                            getPlayerById(positions.pos2)?.username ||
+                            "Player"}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-8 bg-muted/10 rounded-xl border border-dashed border-border text-xs font-medium text-muted-foreground">
+                    No team assigned to left side
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="right" className="space-y-2 mt-0">
+                {isTeamAssigned("right") ? (
+                  <>
+                    {positions.pos3 && (
+                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
+                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                            <User className="size-4 text-muted-foreground" />
+                        </div>
+                        <span className="font-bold text-sm">
+                          {getPlayerById(positions.pos3)?.name ||
+                            getPlayerById(positions.pos3)?.username ||
+                            "Player"}
+                        </span>
+                      </div>
+                    )}
+                    {positions.pos4 && (
+                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
+                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                            <User className="size-4 text-muted-foreground" />
+                        </div>
+                        <span className="font-bold text-sm">
+                          {getPlayerById(positions.pos4)?.name ||
+                            getPlayerById(positions.pos4)?.username ||
+                            "Player"}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-8 bg-muted/10 rounded-xl border border-dashed border-border text-xs font-medium text-muted-foreground">
+                    No team assigned to right side
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
-
-        {/* Teams Section */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold">Teams</h3>
-          </div>
-
-          <Tabs defaultValue="right" className="w-full">
-            <TabsList className="mb-3 w-fit rounded-none shrink-0 *:data-[slot='tabs-trigger']:font-medium *:data-[slot='tabs-trigger']:text-gray-500 *:data-[slot='tabs-trigger']:py-2 *:data-[slot='tabs-trigger']:data-[state=active]:text-purple-600">
-              <TabsTrigger value="left" className="px-4">Left</TabsTrigger>
-              <TabsTrigger value="right" className="px-4">Right</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="left" className="space-y-2 mt-0 capitalize">
-              {isTeamAssigned("left") ? (
-                <>
-                  {positions.pos1 && (
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 bg-green-200 rounded-full" />
-                      <span className="font-medium">
-                        {getPlayerById(positions.pos1)?.name ||
-                          getPlayerById(positions.pos1)?.username ||
-                          "Player"}
-                      </span>
-                    </div>
-                  )}
-                  {positions.pos2 && (
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 bg-green-200 rounded-full" />
-                      <span className="font-medium">
-                        {getPlayerById(positions.pos2)?.name ||
-                          getPlayerById(positions.pos2)?.username ||
-                          "Player"}
-                      </span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-4 text-gray-500 text-sm">
-                  No team assigned to left side
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="right" className="space-y-2 mt-0 capitalize">
-              {isTeamAssigned("right") ? (
-                <>
-                  {positions.pos3 && (
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 bg-green-200 rounded-full" />
-                      <span className="font-medium">
-                        {getPlayerById(positions.pos3)?.name ||
-                          getPlayerById(positions.pos3)?.username ||
-                          "Player"}
-                      </span>
-                    </div>
-                  )}
-                  {positions.pos4 && (
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 bg-green-200 rounded-full" />
-                      <span className="font-medium">
-                        {getPlayerById(positions.pos4)?.name ||
-                          getPlayerById(positions.pos4)?.username ||
-                          "Player"}
-                      </span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-4 text-gray-500 text-sm">
-                  No team assigned to right side
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-    </div>
+      </ScrollablePageContent>
+    </ScrollablePage>
   );
 }

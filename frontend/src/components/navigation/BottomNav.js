@@ -2,71 +2,75 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, User } from "lucide-react";
+import { Home, User, Bell, Users, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNotifications } from "@/hooks/useNotifications";
+import { Badge } from "@/components/ui/badge";
+import { motion } from "framer-motion";
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { unreadCount } = useNotifications();
 
-  const navItems = [
-    { href: "/", icon: Home, label: "Home" },
-    { href: "/calendar", icon: Calendar, label: "Calendar" },
-    { href: "/profile", icon: User, label: "Profile" },
-  ];
-
-  // Alternative nav items for different screens
-  const tournamentNavItems = [
-    { href: "/", icon: Home, label: "Tournaments" },
-    { href: "/tournaments/hosted", icon: Calendar, label: "My Tournaments" },
-    { href: "/profile", icon: User, label: "Profile" },
-  ];
-
-  const profileNavItems = [
-    { href: "/", icon: Home, label: "Home" },
-    { href: "/tournaments/hosted", icon: Calendar, label: "My Tournaments" },
-    { href: "/profile", icon: User, label: "Profile" },
-  ];
-
-  // Determine which nav items to show based on current route
-  let items = navItems;
-  if (pathname?.startsWith("/profile")) {
-    items = profileNavItems;
-  } else if (pathname?.startsWith("/tournaments") || pathname === "/") {
-    items = tournamentNavItems;
+  // Hide BottomNav on tournament detail pages to prevent obstruction
+  if (pathname?.startsWith("/tournaments/")) {
+    return null;
   }
 
-  // Update active state to handle nested routes
+  // Unified nav items logic could be simplified, but keeping structure for now
+  const navItems = [
+    { href: "/tournaments", icon: Trophy, label: "Tournaments" },
+    { href: "/friends", icon: Users, label: "Friends" },
+    { href: "/notifications", icon: Bell, label: "Alerts", badge: unreadCount },
+    { href: "/", icon: User, label: "Profile" }, // Home is Tournaments
+  ];
+
   const isActive = (href) => {
-    if (href === "/") {
-      return pathname === "/";
-    }
+    if (href === "/") return pathname === "/";
     return pathname?.startsWith(href);
   };
 
   return (
-    <nav className="border fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-[500px] mx-auto">
-      <div className="flex justify-around items-center h-16">
-        {items.map((item) => {
+    <nav className="fixed bottom-2 left-4 right-4 z-50 max-w-[500px] mx-auto pointer-events-none">
+      <div className="pointer-events-auto glass rounded-2xl flex justify-around items-center h-16 p-1 m-4 shadow-xl backdrop-blur-xl border border-white/20 dark:border-white/10 bg-background/60 dark:bg-background/40">
+        {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full text-gray-500",
-                active && "text-purple-600"
+                "relative flex flex-col items-center justify-center flex-1 h-full transition-colors duration-300",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon
-                className={cn("size-6 flex-1", active && "text-purple-600")}
-              />
-              <div
-                className={cn(
-                  "w-full h-1 rounded-full mt-1 bg-transparent",
-                  active && "bg-purple-600"
-                )}
-              />
+              {active && (
+                <motion.div
+                  layoutId="nav-pill"
+                  className="absolute inset-0 bg-primary/10 rounded-xl"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+              
+              <div className="relative z-10 flex flex-col items-center gap-1">
+                <div className="relative">
+                  <Icon className={cn("size-6 transition-transform duration-300", active && "scale-110")} />
+                  {item.badge > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="absolute -top-2 -right-2 h-4 w-4 flex items-center justify-center p-0 text-[10px] ring-2 ring-background shadow-sm"
+                    >
+                      {item.badge > 9 ? "9+" : item.badge}
+                    </Badge>
+                  )}
+                </div>
+                <span className={cn("text-[10px] font-medium", active ? "opacity-100" : "opacity-0 hidden")}>
+                  {item.label}
+                </span>
+              </div>
             </Link>
           );
         })}

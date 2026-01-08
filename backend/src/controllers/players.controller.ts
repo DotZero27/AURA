@@ -185,6 +185,7 @@ export async function deletePlayer(c: Context<AuthContext>) {
 // GET /players/search?q=query - Search players by username
 export async function searchPlayers(c: Context<AuthContext>) {
   try {
+    const playerId = c.get("playerId");
     const queryParams = c.req.query();
     const searchQuery = queryParams.q;
 
@@ -196,6 +197,7 @@ export async function searchPlayers(c: Context<AuthContext>) {
       .from("players")
       .select("id, username, photo_url")
       .ilike("username", `%${searchQuery}%`)
+      .neq("id", playerId) // Exclude current player
       .limit(20)
       .order("username", { ascending: true });
 

@@ -20,6 +20,8 @@ import { matchesRoutes } from "@/routes/matches.routes";
 import { scoresRoutes } from "@/routes/scores.routes";
 import { courtsRoutes } from "@/routes/courts.routes";
 import { pairingsRoutes } from "@/routes/pairings.routes";
+import { friendsRoutes } from "@/routes/friends.routes";
+import { notificationsRoutes } from "@/routes/notifications.routes";
 import { env } from "./config/env";
 
 const app = new Hono()
@@ -52,6 +54,8 @@ const app = new Hono()
   .route("/scores", scoresRoutes)
   .route("/courts", courtsRoutes)
   .route("/pairings", pairingsRoutes)
+  .route("/friends", friendsRoutes)
+  .route("/notifications", notificationsRoutes)
   .onError(errorHandler);
 
 showRoutes(app, {

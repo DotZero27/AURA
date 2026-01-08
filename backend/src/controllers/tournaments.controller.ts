@@ -11,7 +11,16 @@ import type {
   createTournamentSchema,
   addTournamentRefereeSchema,
   removeTournamentRefereeSchema,
+  initializeGroupsSchema,
+  swapTeamGroupSchema,
+  setMatchWinnerSchema,
+  engineMatchIdSchema,
+  engineMatchFilterSchema,
 } from "@/utils/validation";
+// Tournament Engine imports
+import { initializeGroups, resetGroups, swapTeamGroup, getTeamsFromInvites } from "@/lib/tournamentGroups";
+import { startNextRound, setMatchWinner, setAllTeam1Winners } from "@/lib/tournamentRounds";
+import { getTournamentInfo, getStandings, getMatches, getNextAction, getRegisteredTeams } from "@/lib/tournamentStatus";
 import { getTournamentRounds as getSortedRounds, parseRoundsFromMetadata } from "@/utils/rounds";
 import { POINTS_TO_WIN, type ScoreMetadata } from "@/lib/scoring";
 import { blended_point_prob, match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
@@ -56,6 +65,7 @@ export async function getAllTournaments(c: Context<AuthContext>) {
       capacity,
       match_format:match_format (
         id,
+        type,
         max_age,
         eligible_gender
       ),
@@ -133,6 +143,7 @@ export async function getAllTournaments(c: Context<AuthContext>) {
           end_date: t.end_time,
           capacity: t.capacity,
           match_format: {
+            type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -198,6 +209,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
       ),
       match_format:match_format (
         id,
+        type,
         max_age,
         eligible_gender
       ),
@@ -224,6 +236,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
           id: tournament.id,
           name: tournament.name,
           match_format: {
+            type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -363,6 +376,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
         end_date: tournament.end_time,
         capacity: tournament.capacity,
         match_format: {
+          type: matchFormat?.type || null,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
@@ -377,6 +391,7 @@ export async function getTournamentById(c: Context<AuthContext>) {
           : null,
         referee: refereeDetails,
         registered_players: registeredPlayers,
+        metadata: tournament.metadata || null,
       },
     });
   } catch (error) {
@@ -407,6 +422,7 @@ export async function getTournamentRound(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
+        type,
         max_age,
         eligible_gender,
         metadata
@@ -656,6 +672,7 @@ export async function getTournamentRound(c: Context<AuthContext>) {
         id: tournament.id,
         name: tournament.name,
         match_format: {
+          type: tournamentMatchFormat?.type || null,
           max_age: tournamentMatchFormat?.max_age || null,
           eligible_gender: tournamentMatchFormat?.eligible_gender || "MW",
         },
@@ -797,6 +814,7 @@ export async function getMatchDetails(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
+        type,
         max_age,
         eligible_gender
       )
@@ -1028,6 +1046,7 @@ export async function getMatchDetails(c: Context<AuthContext>) {
         win_rate: winRate,
         win_prob_A: win_prob_A !== null ? Number((win_prob_A * 100).toFixed(1)) : null,
         match_format: {
+          type: matchFormat?.type || null,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
@@ -1086,6 +1105,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
       name,
       match_format:match_format (
         id,
+        type,
         max_age,
         eligible_gender
       )
@@ -1246,6 +1266,7 @@ export async function getRefereeMatchDetails(c: Context<AuthContext>) {
         winner_team_id: match.winner_team_id,
         court: court?.court_number || null,
         match_format: {
+          type: matchFormat?.type || null,
           max_age: matchFormat?.max_age || null,
           eligible_gender: matchFormat?.eligible_gender || "MW",
         },
@@ -1718,6 +1739,7 @@ export async function getHostedTournaments(c: Context<AuthContext>) {
             address: venue?.address || "",
           },
           match_format: {
+            type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -1816,6 +1838,7 @@ export async function getRefereeTournaments(c: Context<AuthContext>) {
             address: venue?.address || "",
           },
           match_format: {
+            type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -1914,6 +1937,7 @@ export async function getRegisteredTournaments(c: Context<AuthContext>) {
             address: venue?.address || "",
           },
           match_format: {
+            type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
             eligible_gender: matchFormat?.eligible_gender || "MW",
           },
@@ -2067,6 +2091,329 @@ export async function removeTournamentReferee(c: Context<AuthContext>) {
     if (error instanceof HTTPException) {
       throw error;
     }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// ============================================================================
+// TOURNAMENT ENGINE CONTROLLERS (Group + Knockout Format)
+// ============================================================================
+
+// Helper: Verify tournament host
+async function verifyHost(tournamentId: number, playerId: number | string): Promise<boolean> {
+  const playerIdNum = typeof playerId === 'string' ? parseInt(playerId) : playerId;
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("host_id")
+    .eq("id", tournamentId)
+    .single();
+  
+  return tournament?.host_id === playerIdNum;
+}
+
+// GET /tournaments/:id/engine/info - Get tournament engine info
+export async function getEngineInfo(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    const info = await getTournamentInfo(tournamentId);
+    
+    if (!info) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    return c.json({ data: info });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/engine/standings - Get group standings
+export async function getEngineStandings(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    const standings = await getStandings(tournamentId);
+    
+    return c.json({ data: { standings } });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/engine/teams - Get registered teams with group assignments
+export async function getEngineTeams(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    const result = await getRegisteredTeams(tournamentId);
+    
+    return c.json({ data: result });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/engine/matches - Get all matches
+export async function getEngineMatches(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const queryParams = ((c.req as any).valid("query") as any) as z.infer<typeof engineMatchFilterSchema> | undefined;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    const filter = queryParams ? {
+      round: queryParams.round,
+      status: queryParams.status
+    } : undefined;
+
+    const matches = await getMatches(tournamentId, filter);
+    
+    return c.json({ data: { matches } });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// GET /tournaments/:id/engine/next-action - Get next action needed
+export async function getEngineNextAction(c: Context<AuthContext>) {
+  try {
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    const nextAction = await getNextAction(tournamentId);
+    
+    return c.json({ data: nextAction });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/engine/initialize - Initialize groups
+export async function engineInitializeGroups(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const body = ((c.req as any).valid("json") as any) as z.infer<typeof initializeGroupsSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify host
+    if (!(await verifyHost(tournamentId, playerId))) {
+      throw new HTTPException(403, { message: "Only the tournament host can initialize groups" });
+    }
+
+    const result = await initializeGroups(tournamentId, body.numberOfGroups);
+    
+    if (!result.success) {
+      throw new HTTPException(400, { message: result.message });
+    }
+
+    return c.json({ data: result }, 201);
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/engine/next-round - Start next round
+export async function engineStartNextRound(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify host
+    if (!(await verifyHost(tournamentId, playerId))) {
+      throw new HTTPException(403, { message: "Only the tournament host can start rounds" });
+    }
+
+    const result = await startNextRound(tournamentId);
+    
+    if (!result.success) {
+      throw new HTTPException(400, { message: result.message });
+    }
+
+    return c.json({ data: result }, 201);
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/engine/swap-team - Swap team between groups
+export async function engineSwapTeam(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const body = ((c.req as any).valid("json") as any) as z.infer<typeof swapTeamGroupSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify host
+    if (!(await verifyHost(tournamentId, playerId))) {
+      throw new HTTPException(403, { message: "Only the tournament host can swap teams" });
+    }
+
+    const result = await swapTeamGroup(
+      tournamentId,
+      body.teamId,
+      body.fromGroup,
+      body.toGroup
+    );
+    
+    if (!result.success) {
+      throw new HTTPException(400, { message: result.message });
+    }
+
+    return c.json({ data: result });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/engine/reset - Reset tournament
+export async function engineReset(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify host
+    if (!(await verifyHost(tournamentId, playerId))) {
+      throw new HTTPException(403, { message: "Only the tournament host can reset the tournament" });
+    }
+
+    const result = await resetGroups(tournamentId);
+    
+    if (!result.success) {
+      throw new HTTPException(400, { message: result.message });
+    }
+
+    return c.json({ data: result });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/:id/engine/set-all-winners - Set all pending matches with Team 1 as winner (testing)
+export async function engineSetAllWinners(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify host
+    if (!(await verifyHost(tournamentId, playerId))) {
+      throw new HTTPException(403, { message: "Only the tournament host can set match winners" });
+    }
+
+    const result = await setAllTeam1Winners(tournamentId);
+    
+    return c.json({ data: result });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}
+
+// POST /tournaments/engine/match/:matchId/winner - Set match winner
+export async function engineSetMatchWinner(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof engineMatchIdSchema>;
+    const body = ((c.req as any).valid("json") as any) as z.infer<typeof setMatchWinnerSchema>;
+    const matchId = parseInt(params.matchId);
+
+    if (isNaN(matchId)) {
+      throw new HTTPException(400, { message: "Invalid match ID" });
+    }
+
+    // Get tournament from match to verify host
+    const { data: match } = await supabase
+      .from("matches")
+      .select("tournament_id")
+      .eq("id", matchId)
+      .single();
+
+    if (!match) {
+      throw new HTTPException(404, { message: "Match not found" });
+    }
+
+    // Verify host or referee
+    const { data: tournament } = await supabase
+      .from("tournaments")
+      .select("host_id")
+      .eq("id", match.tournament_id)
+      .single();
+
+    const { data: referee } = await supabase
+      .from("tournaments_referee")
+      .select("id")
+      .eq("tournament_id", match.tournament_id)
+      .eq("player_id", playerId)
+      .single();
+
+    if (tournament?.host_id !== playerId && !referee) {
+      throw new HTTPException(403, { message: "Only the tournament host or referee can set match winners" });
+    }
+
+    const result = await setMatchWinner(matchId, body.winnerTeamId);
+    
+    if (!result.success) {
+      throw new HTTPException(400, { message: result.message });
+    }
+
+    return c.json({ data: result });
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
     throw new HTTPException(500, { message: (error as Error).message });
   }
 }
