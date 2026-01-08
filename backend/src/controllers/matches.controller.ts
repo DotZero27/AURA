@@ -1099,7 +1099,6 @@ export async function getMatchState(c: Context<AuthContext>) {
   }
 }
 
-// GET /matches/referee - Get all matches assigned to current user as referee
 export async function getRefereeMatches(c: Context<AuthContext>) {
   try {
     const playerId = c.get("playerId");
@@ -1155,6 +1154,7 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
       )
       .in("tournament_id", tournamentIds)
       .eq("refree_id", playerId)
+      .neq("status", "bye")  // Filter out bye matches - they don't need refereeing
       .order("start_time", { ascending: false });
 
     if (error) {
