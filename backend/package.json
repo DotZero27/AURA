@@ -3,7 +3,8 @@
   "scripts": {
     "dev": "bun run --hot src/index.ts",
     "build": "bun build src/app.ts --outdir ./dist --minify --target bun",
-    "start": "bun run dist/app.js"
+    "start": "bun run dist/app.js",
+    "create-tournament": "bun run src/scripts/createGroupMensDoublesTournament.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.5",
