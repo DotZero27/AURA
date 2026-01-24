@@ -104,7 +104,7 @@ async function createGroupMensDoublesTournament() {
     console.log(`✅ Created match format (ID: ${matchFormat.id})\n`);
 
     // Step 5: Check and delete existing tournament if it exists
-    const tournamentName = 'Auto Group Mixed Doubles Tournament';
+    const tournamentName = 'Review Group Mixed Doubles Tournament';
     console.log('🔍 Checking for existing tournament...');
     const { data: existingTournaments, error: checkError } = await supabase
       .from('tournaments')
