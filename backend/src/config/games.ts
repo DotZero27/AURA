@@ -1,5 +1,5 @@
-export const BADMINTON = "BADMINTON";
-export const PICKLEBALL = "PICKLEBALL";
+export const BADMINTON = "Badminton";
+export const PICKLEBALL = "Pickleball";
 
 export const Games = {
     [BADMINTON]: {
