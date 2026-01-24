@@ -31,6 +31,7 @@ import {
   getRegisteredTournaments,
   addTournamentReferee,
   removeTournamentReferee,
+  deleteTournament,
   // Tournament Engine controllers
   getEngineInfo,
   getEngineStandings,
@@ -315,6 +316,14 @@ tournamentsRoutes.delete(
   authMiddleware,
   zValidator("param", removeTournamentRefereeSchema),
   removeTournamentReferee
+);
+
+// DELETE /tournaments/:id - Delete tournament and all related data
+tournamentsRoutes.delete(
+  "/:id",
+  authMiddleware,
+  zValidator("param", tournamentIdSchema),
+  deleteTournament
 );
 
 // POST /tournaments/:id/invite - Invite friend to tournament team

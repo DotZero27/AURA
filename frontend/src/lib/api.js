@@ -119,6 +119,11 @@ export const tournamentsApi = {
   getCurrentRoundMatches: (id) => {
     return apiClient.get(`/tournaments/${id}/current-round-matches`);
   },
+
+  // DELETE /tournaments/:id - Delete tournament and all related data
+  delete: (id) => {
+    return apiClient.delete(`/tournaments/${id}`);
+  },
 };
 
 // Matches API

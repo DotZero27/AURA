@@ -2508,3 +2508,262 @@ export async function engineSetMatchWinner(c: Context<AuthContext>) {
     throw new HTTPException(500, { message: (error as Error).message });
   }
 }
+
+// DELETE /tournaments/:id - Delete tournament and all related data
+export async function deleteTournament(c: Context<AuthContext>) {
+  try {
+    const playerId = c.get("playerId");
+    const params = ((c.req as any).valid("param") as any) as z.infer<typeof tournamentIdSchema>;
+    const tournamentId = parseInt(params.id);
+
+    if (isNaN(tournamentId)) {
+      throw new HTTPException(400, { message: "Invalid tournament ID" });
+    }
+
+    // Verify user is the host
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("id, host_id")
+      .eq("id", tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new HTTPException(404, { message: "Tournament not found" });
+    }
+
+    if (tournament.host_id !== playerId) {
+      throw new HTTPException(403, {
+        message: "Only the tournament host can delete the tournament",
+      });
+    }
+
+    // Get all matches for this tournament
+    const { data: matches, error: matchesError } = await supabase
+      .from("matches")
+      .select("id")
+      .eq("tournament_id", tournamentId);
+
+    if (matchesError) {
+      throw new HTTPException(500, { message: matchesError.message });
+    }
+
+    const matchIds = matches?.map((m: any) => m.id) || [];
+
+    // Delete rating_history entries for these matches
+    if (matchIds.length > 0) {
+      const { error: ratingHistoryError } = await supabase
+        .from("rating_history")
+        .delete()
+        .in("match_id", matchIds);
+
+      if (ratingHistoryError) {
+        throw new HTTPException(500, { message: ratingHistoryError.message });
+      }
+    }
+
+    // Get team_ids from scores (serving_team_id) BEFORE deleting scores
+    let scoreTeamIds: number[] = [];
+    if (matchIds.length > 0) {
+      const { data: scoresWithTeams, error: scoresSelectError } = await supabase
+        .from("scores")
+        .select("serving_team_id")
+        .in("match_id", matchIds)
+        .not("serving_team_id", "is", null);
+
+      if (scoresSelectError) {
+        throw new HTTPException(500, { message: scoresSelectError.message });
+      }
+
+      scoreTeamIds = scoresWithTeams?.map((s: any) => s.serving_team_id).filter((id: any) => id != null) || [];
+    }
+
+    // Delete scores for these matches
+    if (matchIds.length > 0) {
+      const { error: scoresError } = await supabase
+        .from("scores")
+        .delete()
+        .in("match_id", matchIds);
+
+      if (scoresError) {
+        throw new HTTPException(500, { message: scoresError.message });
+      }
+    }
+
+    // Get all pairings for these matches and by tournament_id
+    let pairingIds: number[] = [];
+    if (matchIds.length > 0) {
+      const { data: pairings, error: pairingsError } = await supabase
+        .from("pairings")
+        .select("id")
+        .in("match_id", matchIds);
+
+      if (pairingsError) {
+        throw new HTTPException(500, { message: pairingsError.message });
+      }
+
+      pairingIds = pairings?.map((p: any) => p.id) || [];
+    }
+
+    // Get pairings by tournament_id (in case there are any orphaned)
+    const { data: tournamentPairings, error: tournamentPairingsError } = await supabase
+      .from("pairings")
+      .select("id")
+      .eq("tournament_id", tournamentId);
+
+    if (tournamentPairingsError) {
+      throw new HTTPException(500, { message: tournamentPairingsError.message });
+    }
+
+    const tournamentPairingIds = tournamentPairings?.map((p: any) => p.id) || [];
+    const allPairingIds = [...new Set([...pairingIds, ...tournamentPairingIds])];
+
+    // Get all team_ids from pairing_teams before deleting them
+    let teamIds: number[] = [];
+    if (allPairingIds.length > 0) {
+      const { data: pairingTeams, error: pairingTeamsSelectError } = await supabase
+        .from("pairing_teams")
+        .select("team_id")
+        .in("pairing_id", allPairingIds);
+
+      if (pairingTeamsSelectError) {
+        throw new HTTPException(500, { message: pairingTeamsSelectError.message });
+      }
+
+      teamIds = pairingTeams?.map((pt: any) => pt.team_id).filter((id: any) => id != null) || [];
+
+      // Delete pairing_teams
+      const { error: pairingTeamsError } = await supabase
+        .from("pairing_teams")
+        .delete()
+        .in("pairing_id", allPairingIds);
+
+      if (pairingTeamsError) {
+        throw new HTTPException(500, { message: pairingTeamsError.message });
+      }
+    }
+
+    // Get team_ids from matches (winner_team_id) BEFORE deleting matches
+    if (matchIds.length > 0) {
+      const { data: matchesWithTeams, error: matchesTeamsError } = await supabase
+        .from("matches")
+        .select("winner_team_id")
+        .in("id", matchIds)
+        .not("winner_team_id", "is", null);
+
+      if (matchesTeamsError) {
+        throw new HTTPException(500, { message: matchesTeamsError.message });
+      }
+
+      const winnerTeamIds = matchesWithTeams?.map((m: any) => m.winner_team_id).filter((id: any) => id != null) || [];
+      teamIds = [...new Set([...teamIds, ...winnerTeamIds, ...scoreTeamIds])];
+    }
+
+    // Get team_ids from tournament_invites (team_id) BEFORE deleting teams
+    const { data: invitesWithTeams, error: invitesSelectError } = await supabase
+      .from("tournament_invites")
+      .select("team_id")
+      .eq("tournament_id", tournamentId)
+      .not("team_id", "is", null);
+
+    if (invitesSelectError) {
+      throw new HTTPException(500, { message: invitesSelectError.message });
+    }
+
+    const inviteTeamIds = invitesWithTeams?.map((inv: any) => inv.team_id).filter((id: any) => id != null) || [];
+    teamIds = [...new Set([...teamIds, ...inviteTeamIds])];
+
+    // Delete pairings
+    if (allPairingIds.length > 0) {
+      const { error: pairingsDeleteError } = await supabase
+        .from("pairings")
+        .delete()
+        .eq("tournament_id", tournamentId);
+
+      if (pairingsDeleteError) {
+        throw new HTTPException(500, { message: pairingsDeleteError.message });
+      }
+    }
+
+    // Delete matches FIRST (before deleting teams to avoid foreign key constraint violation)
+    if (matchIds.length > 0) {
+      const { error: matchesDeleteError } = await supabase
+        .from("matches")
+        .delete()
+        .eq("tournament_id", tournamentId);
+
+      if (matchesDeleteError) {
+        throw new HTTPException(500, { message: matchesDeleteError.message });
+      }
+    }
+
+    // Delete team_members and teams (after matches are deleted)
+    if (teamIds.length > 0) {
+      // Delete team_members first
+      const { error: teamMembersError } = await supabase
+        .from("team_members")
+        .delete()
+        .in("team_id", teamIds);
+
+      if (teamMembersError) {
+        throw new HTTPException(500, { message: teamMembersError.message });
+      }
+
+      // Delete teams
+      const { error: teamsError } = await supabase
+        .from("teams")
+        .delete()
+        .in("team_id", teamIds);
+
+      if (teamsError) {
+        throw new HTTPException(500, { message: teamsError.message });
+      }
+    }
+
+    // Delete registrations
+    const { error: registrationsError } = await supabase
+      .from("registrations")
+      .delete()
+      .eq("tournament_id", tournamentId);
+
+    if (registrationsError) {
+      throw new HTTPException(500, { message: registrationsError.message });
+    }
+
+    // Delete tournaments_referee
+    const { error: refereesError } = await supabase
+      .from("tournaments_referee")
+      .delete()
+      .eq("tournament_id", tournamentId);
+
+    if (refereesError) {
+      throw new HTTPException(500, { message: refereesError.message });
+    }
+
+    // Delete tournament_invites (has CASCADE but being explicit)
+    const { error: invitesError } = await supabase
+      .from("tournament_invites")
+      .delete()
+      .eq("tournament_id", tournamentId);
+
+    if (invitesError) {
+      throw new HTTPException(500, { message: invitesError.message });
+    }
+
+    // Finally, delete the tournament
+    const { error: tournamentDeleteError } = await supabase
+      .from("tournaments")
+      .delete()
+      .eq("id", tournamentId);
+
+    if (tournamentDeleteError) {
+      throw new HTTPException(500, { message: tournamentDeleteError.message });
+    }
+
+    return c.json({ data: { success: true } });
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      throw error;
+    }
+    throw new HTTPException(500, { message: (error as Error).message });
+  }
+}

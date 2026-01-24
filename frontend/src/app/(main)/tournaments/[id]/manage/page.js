@@ -36,6 +36,7 @@ import {
   ShieldAlert,
   LayoutGrid,
   Eye,
+  Trash2,
 } from "lucide-react";
 import {
   ScrollablePage,
@@ -53,6 +54,7 @@ export default function TournamentManagePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isGroupManagerDialogOpen, setIsGroupManagerDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const { data: tournament, isLoading } = useQuery({
     queryKey: ["tournament", params.id],
@@ -107,6 +109,20 @@ export default function TournamentManagePage() {
     onError: (error) => {
       const errorMessage =
         error?.response?.data?.message || "Failed to remove referee";
+      toast.error(errorMessage);
+    },
+  });
+
+  const deleteTournamentMutation = useMutation({
+    mutationFn: () => tournamentsApi.delete(params.id),
+    onSuccess: () => {
+      toast.success("Tournament deleted successfully!");
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      router.push("/");
+    },
+    onError: (error) => {
+      const errorMessage =
+        error?.response?.data?.message || "Failed to delete tournament";
       toast.error(errorMessage);
     },
   });
@@ -423,8 +439,46 @@ export default function TournamentManagePage() {
 
         {/* Tournament Info */}
         <div className="px-4 pt-4">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-2xl font-black italic tracking-tight uppercase">{tournament.name}</h2>
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-2 font-bold rounded-xl"
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-border/50">
+                <DialogHeader>
+                  <DialogTitle className="font-black uppercase tracking-tight">Delete Tournament</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this tournament? This action cannot be undone. All matches, scores, ratings, registrations, and related data will be permanently deleted.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(false)}
+                    disabled={deleteTournamentMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => deleteTournamentMutation.mutate()}
+                    disabled={deleteTournamentMutation.isPending}
+                    className="gap-2"
+                  >
+                    <Trash2 className="size-4" />
+                    {deleteTournamentMutation.isPending ? "Deleting..." : "Delete Tournament"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           <div className="flex items-center gap-2 mb-3">
             <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider border-border/50">

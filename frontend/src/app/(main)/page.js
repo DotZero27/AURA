@@ -6,7 +6,7 @@ import { useUser } from "@/hooks/useUser";
 import { useAuth } from "@/contexts/AuthContext";
 import { tournamentsApi, matchesApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import {
@@ -27,6 +27,7 @@ import {
   CalendarDays,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -199,12 +200,11 @@ export default function ProfilePage() {
             </div>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={signOut}
               className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             >
-              <LogOut className="size-4 mr-2" />
-              Logout
+              <LogOut className="size-4" />
             </Button>
           </div>
         </header>
@@ -916,7 +916,7 @@ export default function ProfilePage() {
                       onClick={() =>
                         router.push(`/tournaments/${tournament.id}/manage`)
                       }
-                      className="cursor-pointer overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-primary/10"
+                      className="cursor-pointer overflow-hidden border-border/50 p-0 hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-primary/10"
                     >
                       <div className="p-4 space-y-4">
                         {/* Header */}
@@ -1005,13 +1005,12 @@ export default function ProfilePage() {
                         </div>
 
                         {/* Action Button */}
-                        <Button
-                          className="w-full gap-2 font-bold"
-                          variant={status === "live" ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/tournaments/${tournament.id}/manage`);
-                          }}
+                        <Link
+                          href={`/tournaments/${tournament.id}/manage`}
+                          className={buttonVariants({
+                            variant: status === "live" ? "default" : "outline",
+                            className: "w-full gap-2 font-bold",
+                          })}
                         >
                           {status === "live" ? (
                             <>
@@ -1024,7 +1023,7 @@ export default function ProfilePage() {
                               <ChevronRight className="size-4" />
                             </>
                           )}
-                        </Button>
+                        </Link>
                       </div>
                     </Card>
                   );
@@ -1131,19 +1130,16 @@ export default function ProfilePage() {
                           </div>
 
                           {/* Action Button */}
-                          <Button
-                            size="sm"
-                            className="w-full gap-2 font-bold"
-                            variant={
-                              match.status === "completed"
-                                ? "outline"
-                                : "default"
-                            }
-                            onClick={() =>
-                              router.push(
-                                `/tournaments/referee/${match.tournament_id}/${match.round}/${match.id}`,
-                              )
-                            }
+                          <Link
+                            className={buttonVariants({
+                              variant:
+                                match.status === "completed"
+                                  ? "outline"
+                                  : "default",
+                              className: "w-full gap-2 font-bold",
+                              size: "sm",
+                            })}
+                            href={`/tournaments/referee/${match.tournament_id}/${match.round}/${match.id}`}
                           >
                             {match.status === "in_progress" ? (
                               <>
@@ -1157,7 +1153,7 @@ export default function ProfilePage() {
                               </>
                             )}
                             <ChevronRight className="size-4" />
-                          </Button>
+                          </Link>
                         </div>
                       </div>
                     </Card>
@@ -1169,15 +1165,13 @@ export default function ProfilePage() {
                     No matches yet. Waiting for host to start rounds.
                   </p>
                   {allRefereeTournaments.map((tournament, index) => (
-                    <div
+                    <Link
                       key={tournament.id}
-                      onClick={() =>
-                        router.push(`/tournaments/${tournament.id}`)
-                      }
+                      href={`/tournaments/${tournament.id}`}
                       className="cursor-pointer"
                     >
                       <TournamentCard tournament={tournament} index={index} />
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (

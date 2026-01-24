@@ -45,12 +45,12 @@ import {
   MapPin,
   Users,
   Calendar,
-  Clock,
   DollarSign,
   Image,
   FileText,
   Settings,
   Layers,
+  RotateCcw,
 } from "lucide-react";
 
 // Tournament format options
@@ -1098,16 +1098,16 @@ export default function CreateTournamentPage() {
           </Card>
 
           {/* Action Buttons */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 z-50 bg-gradient-to-t from-background via-background to-transparent pt-12 pointer-events-none">
-            <div className="max-w-md mx-auto w-full space-y-2 pointer-events-auto pb-4">
-              <div className="flex gap-3">
+          <div className="fixed bottom-0 left-0 right-0 p-4 z-50 pointer-events-none ">
+            <div className="max-w-[500px] mx-auto w-full space-y-2 border-r border-l pt-8 pointer-events-auto bg-linear-to-t from-background via-background to-transparent">
+              <div className="flex items-center justify-center gap-3 p-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => form.reset()}
-                  className="rounded-xl font-bold"
+                  className="size-12"
                 >
-                  Reset
+                  <RotateCcw className="size-4"/>
                 </Button>
                 <Button
                   type="submit"
