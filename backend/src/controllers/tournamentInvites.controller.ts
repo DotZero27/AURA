@@ -69,7 +69,7 @@ export async function inviteToTournament(c: Context<AuthContext>) {
     if (!teamId) {
       const { data: newTeam, error: teamError } = await supabase
         .from("teams")
-        .insert({})
+        .insert({ tournament_id: tournamentId })
         .select()
         .single();
 
@@ -215,7 +215,7 @@ export async function generateShareableLink(c: Context<AuthContext>) {
     if (!teamId) {
       const { data: newTeam, error: teamError } = await supabase
         .from("teams")
-        .insert({})
+        .insert({ tournament_id: tournamentId })
         .select()
         .single();
 
@@ -456,7 +456,7 @@ export async function acceptInviteByToken(c: Context<AuthContext>) {
 
         // Check if there's space (for doubles, each team counts as 1 spot but has 2 players)
         const currentTeamCount = Math.floor((registrationCount || 0) / 2);
-        
+
         if (currentTeamCount < tournament.capacity) {
           // Register both team members
           for (const member of teamMembers) {

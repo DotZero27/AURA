@@ -2,8 +2,9 @@
   "name": "backend",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "build": "bun build src/app.ts --outdir ./dist --minify --target bun",
-    "start": "bun run dist/app.js"
+    "build": "bun build src/index.ts --outdir ./dist --minify --target bun",
+    "create-tournament": "bun run src/scripts/createGroupMensDoublesTournament.ts",
+    "start": "bun run dist/index.js"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.5",

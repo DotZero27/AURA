@@ -8,21 +8,10 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 export default function ScoreDrawer({
-  isLoading,
   teamId,
   teamName,
   currentScore,
@@ -30,20 +19,10 @@ export default function ScoreDrawer({
   trigger,
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const handleIncrement = () => {
-    setConfirmOpen(true);
-  };
 
   const handleConfirm = () => {
     onConfirm(teamId);
     setOpen(false);
-    setConfirmOpen(false);
-  };
-
-  const handleCancel = () => {
-    setConfirmOpen(false);
   };
 
   return (
@@ -64,7 +43,7 @@ export default function ScoreDrawer({
                 Click the button below to increment the score by 1
               </div>
               <Button
-                onClick={handleIncrement}
+                onClick={handleConfirm}
                 className="w-full"
                 size="lg"
                 variant="default"
@@ -76,22 +55,6 @@ export default function ScoreDrawer({
           </div>
         </DrawerContent>
       </Drawer>
-
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Score Update</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to increment {teamName}'s score from {currentScore} to{" "}
-              {currentScore + 1}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={isLoading} onClick={handleConfirm}>Confirm</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

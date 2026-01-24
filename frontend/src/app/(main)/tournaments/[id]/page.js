@@ -111,6 +111,7 @@ export default function TournamentDetailsPage() {
     registered_count,
     registered_players,
     image_url,
+    metadata,
   } = tournament;
 
   const category =
@@ -122,6 +123,14 @@ export default function TournamentDetailsPage() {
 
   const registeredCount = registered_count || 0;
   const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
+  const isFull = capacity > 0 && registeredCount >= capacity;
+  
+  // Check if tournament has started (start_time has passed or any round has begun)
+  const startTime = new Date(start_date);
+  const now = new Date();
+  const hasStarted = startTime <= now;
+  const hasRoundBegun = metadata?.current_round > 0 || metadata?.stage !== 'registration';
+  const tournamentStarted = hasStarted || hasRoundBegun;
 
   return (
     <ScrollablePage className="h-dvh bg-background">
@@ -320,7 +329,7 @@ export default function TournamentDetailsPage() {
             </div>
           ) : (
             <>
-              {isDoubles && !tournament?.registered && new Date(start_date) > new Date() && !teamComplete && (
+              {isDoubles && !tournament?.registered && new Date(start_date) > new Date() && !teamComplete && !isFull && (
                 <Button
                   variant="secondary"
                   className="w-full rounded-xl shadow-lg border border-border/50"
@@ -339,22 +348,20 @@ export default function TournamentDetailsPage() {
               <Button
                 className="w-full h-14 rounded-xl shadow-xl shadow-primary/25 text-lg font-black uppercase tracking-wide"
                 onClick={() => {
-                  const startTime = new Date(start_date);
-                  const now = new Date();
                   const isRegistered = tournament?.registered || (isDoubles && teamComplete);
 
-                  if (isRegistered || startTime <= now) {
+                  if (isRegistered || tournamentStarted) {
                     router.push(`/tournaments/${params.id}/stats`);
-                  } else {
+                  } else if (!isFull) {
                     setIsDrawerOpen(true);
                   }
                 }}
-                disabled={registrationMutation.isPending}
+                disabled={registrationMutation.isPending || (isFull && !tournamentStarted)}
               >
-                {tournament?.registered || (isDoubles && teamComplete)
-                  ? "View Stats"
-                  : new Date(start_date) <= new Date()
-                  ? "View Stats"
+                {isFull && !tournamentStarted
+                  ? "Tournament Full"
+                  : tournamentStarted || tournament?.registered || (isDoubles && teamComplete)
+                  ? "View Pairings & Leaderboard"
                   : "Book Your Spot"}
               </Button>
             </>
@@ -372,6 +379,14 @@ export default function TournamentDetailsPage() {
             </DrawerDescription>
           </DrawerHeader>
           <div className="px-4 py-2 space-y-2">
+            {isFull && (
+              <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-sm font-medium text-red-900">Tournament Full</p>
+                <p className="text-xs text-red-700 mt-1">
+                  This tournament has reached its capacity of {capacity} players. Registration is no longer available.
+                </p>
+              </div>
+            )}
             {isDoubles && (
               <div className="mb-4 p-3 bg-purple-50 rounded-lg">
                 <p className="text-sm font-medium text-purple-900 mb-2">Team Registration</p>
@@ -433,12 +448,14 @@ export default function TournamentDetailsPage() {
           <DrawerFooter>
             <Button
               onClick={() => registrationMutation.mutate()}
-              disabled={registrationMutation.isPending || (isDoubles && !teamComplete)}
+              disabled={registrationMutation.isPending || (isDoubles && !teamComplete) || isFull}
               className="w-full"
               size="lg"
             >
               {registrationMutation.isPending
                 ? "Registering..."
+                : isFull
+                ? "Tournament Full"
                 : "Confirm Registration"}
             </Button>
             <Button

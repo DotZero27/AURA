@@ -13,7 +13,7 @@ import type {
 } from "@/utils/validation";
 // Import types and constants from scoring.ts
 import { POINTS_TO_WIN, WIN_BY, type ScoreMetadata } from "@/lib/scoring";
-import { update_player_ratings_in_db,blended_point_prob,match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
+import { update_player_ratings_in_db, blended_point_prob, match_prob_with_beta_uncertainty } from "@/lib/ratingWinprobLogic";
 import { broadcastMatchScore, broadcastMatchEnd } from "@/lib/websocket";
 
 // Helper: Verify teams and return IDs strictly (A = Lower ID, B = Higher ID)
@@ -827,7 +827,7 @@ export async function recordPoint(c: Context<AuthContext>) {
         newScoreB
       );
       console.log(`[Match ${matchId}] Completed. Ratings updated.`);
-      
+
       // Broadcast match end event
       broadcastMatchEnd(matchId, winnerId);
     }
@@ -850,10 +850,10 @@ export async function recordPoint(c: Context<AuthContext>) {
 
     const getStat = (id: number) => {
       const r = ratingData?.find(x => x.player_id === id);
-      return { 
-        id, 
-        mu: r?.aura_mu ?? 25.0, 
-        sigma: r?.aura_sigma ?? 8.33 
+      return {
+        id,
+        mu: r?.aura_mu ?? 25.0,
+        sigma: r?.aura_sigma ?? 8.33
       };
     };
 
@@ -877,7 +877,7 @@ export async function recordPoint(c: Context<AuthContext>) {
     console.log(`[Match ${matchId}] Point: ${newScoreA}-${newScoreB}. Win Prob Team A: ${(win_prob_A * 100).toFixed(1)}%`);
 
     // Broadcast score update to all connected WebSocket clients
-    broadcastMatchScore(matchId, newScoreA, newScoreB, Number((win_prob_A*100).toFixed(1)));
+    broadcastMatchScore(matchId, newScoreA, newScoreB, Number((win_prob_A * 100).toFixed(1)));
 
     return c.json({
       data: {
@@ -1005,10 +1005,10 @@ export async function undoMatch(c: Context<AuthContext>) {
 
     const getStat = (id: number) => {
       const r = ratingData?.find(x => x.player_id === id);
-      return { 
-        id, 
-        mu: r?.aura_mu ?? 25.0, 
-        sigma: r?.aura_sigma ?? 8.33 
+      return {
+        id,
+        mu: r?.aura_mu ?? 25.0,
+        sigma: r?.aura_sigma ?? 8.33
       };
     };
 
@@ -1099,12 +1099,27 @@ export async function getMatchState(c: Context<AuthContext>) {
   }
 }
 
-// GET /matches/referee - Get all matches assigned to current user as referee
 export async function getRefereeMatches(c: Context<AuthContext>) {
   try {
     const playerId = c.get("playerId");
 
-    // Get all matches where current user is assigned as referee
+    // First, get tournament IDs where current user is a referee
+    const { data: refereeTournaments, error: refError } = await supabase
+      .from("tournaments_referee")
+      .select("tournament_id")
+      .eq("player_id", playerId);
+
+    if (refError) {
+      throw new HTTPException(500, { message: refError.message });
+    }
+
+    const tournamentIds = refereeTournaments?.map((t: any) => t.tournament_id) || [];
+
+    if (tournamentIds.length === 0) {
+      return c.json({ data: { matches: [] } });
+    }
+
+    // Get matches from tournaments where user is a referee AND assigned to the match
     const { data: matches, error } = await supabase
       .from("matches")
       .select(
@@ -1137,7 +1152,9 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
         )
       `
       )
+      .in("tournament_id", tournamentIds)
       .eq("refree_id", playerId)
+      .neq("status", "bye")  // Filter out bye matches - they don't need refereeing
       .order("start_time", { ascending: false });
 
     if (error) {
@@ -1146,7 +1163,7 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
 
     // Get pairings for these matches to get team/player info
     const matchIds = matches?.map((m: any) => m.id) || [];
-    
+
     if (matchIds.length === 0) {
       return c.json({ data: { matches: [] } });
     }
@@ -1212,7 +1229,7 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
           });
 
           const matchScores = scores?.filter((s: any) => s.match_id === match.id) || [];
-          const latestScore = matchScores.length > 0 
+          const latestScore = matchScores.length > 0
             ? matchScores.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
             : null;
 
@@ -1226,14 +1243,14 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
             tournament_id: match.tournament_id,
             tournament: tournament
               ? {
-                  id: tournament.id,
-                  name: tournament.name,
-                  description: tournament.description,
-                  image_url: tournament.image_url,
-                  start_time: tournament.start_time,
-                  end_time: tournament.end_time,
-                  venue: tournament.venue,
-                }
+                id: tournament.id,
+                name: tournament.name,
+                description: tournament.description,
+                image_url: tournament.image_url,
+                start_time: tournament.start_time,
+                end_time: tournament.end_time,
+                venue: tournament.venue,
+              }
               : null,
             round: match.round,
             status: match.status,
@@ -1243,9 +1260,9 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
             players: players || [],
             scores: latestScore
               ? {
-                  teamA: latestScore.team_a_score || 0,
-                  teamB: latestScore.team_b_score || 0,
-                }
+                teamA: latestScore.team_a_score || 0,
+                teamB: latestScore.team_b_score || 0,
+              }
               : null,
           };
         });
@@ -1266,14 +1283,14 @@ export async function getRefereeMatches(c: Context<AuthContext>) {
         tournament_id: match.tournament_id,
         tournament: tournament
           ? {
-              id: tournament.id,
-              name: tournament.name,
-              description: tournament.description,
-              image_url: tournament.image_url,
-              start_time: tournament.start_time,
-              end_time: tournament.end_time,
-              venue: tournament.venue,
-            }
+            id: tournament.id,
+            name: tournament.name,
+            description: tournament.description,
+            image_url: tournament.image_url,
+            start_time: tournament.start_time,
+            end_time: tournament.end_time,
+            venue: tournament.venue,
+          }
           : null,
         round: match.round,
         status: match.status,

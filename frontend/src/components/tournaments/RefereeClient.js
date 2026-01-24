@@ -278,6 +278,26 @@ export default function RefereeClient() {
   const isTeamAServing = servingTeamId && String(servingTeamId) === teamAId;
   const isTeamBServing = servingTeamId && String(servingTeamId) === teamBId;
 
+  // Determine which player position is serving
+  // server_sequence: 1 = right player, 2 = left player
+  const getServingPlayerId = () => {
+    if (!isMatchStarted || !servingTeamId || serverSequence === null || serverSequence === undefined) {
+      return null;
+    }
+    
+    if (isTeamAServing) {
+      // Team A: sequence 1 = pos1 (right), sequence 2 = pos2 (left)
+      return serverSequence === 1 ? positions.pos1 : positions.pos2;
+    } else if (isTeamBServing) {
+      // Team B: sequence 1 = pos3 (right), sequence 2 = pos4 (left)
+      return serverSequence === 1 ? positions.pos3 : positions.pos4;
+    }
+    return null;
+  };
+
+  const servingPlayerId = getServingPlayerId();
+  const isPlayerServing = (playerId) => servingPlayerId === playerId;
+
   // Check if all positions are assigned
   const allPositionsAssigned =
     positions.pos1 &&
@@ -681,8 +701,20 @@ export default function RefereeClient() {
                             </Button>
                           )}
                           <div className="flex flex-col items-center gap-2 w-full">
-                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
-                              <User className="size-6 text-muted-foreground" />
+                            <div className="relative">
+                              <div className={cn(
+                                "size-14 rounded-full bg-muted flex items-center justify-center transition-all",
+                                isPlayerServing(positions.pos1)
+                                  ? "ring-4 ring-brand-blue ring-offset-2 ring-offset-background animate-pulse"
+                                  : "ring-4 ring-muted/20"
+                              )}>
+                                <User className="size-6 text-muted-foreground" />
+                              </div>
+                              {isPlayerServing(positions.pos1) && (
+                                <div className="absolute -top-1 -right-1 bg-brand-blue text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                  Serve
+                                </div>
+                              )}
                             </div>
                             <span className="text-xs font-bold text-center truncate w-full px-1">
                               {getPlayerById(positions.pos1)?.name ||
@@ -694,8 +726,20 @@ export default function RefereeClient() {
                         {/* Bottom - pos2 */}
                         <div className="flex-1 flex flex-col items-center justify-center p-2 relative group hover:bg-muted/5 transition-colors">
                           <div className="flex flex-col items-center gap-2 w-full">
-                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
-                              <User className="size-6 text-muted-foreground" />
+                            <div className="relative">
+                              <div className={cn(
+                                "size-14 rounded-full bg-muted flex items-center justify-center transition-all",
+                                isPlayerServing(positions.pos2)
+                                  ? "ring-4 ring-brand-blue ring-offset-2 ring-offset-background animate-pulse"
+                                  : "ring-4 ring-muted/20"
+                              )}>
+                                <User className="size-6 text-muted-foreground" />
+                              </div>
+                              {isPlayerServing(positions.pos2) && (
+                                <div className="absolute -top-1 -right-1 bg-brand-blue text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                  Serve
+                                </div>
+                              )}
                             </div>
                             <span className="text-xs font-bold text-center truncate w-full px-1">
                               {getPlayerById(positions.pos2)?.name ||
@@ -743,8 +787,20 @@ export default function RefereeClient() {
                             </Button>
                           )}
                           <div className="flex flex-col items-center gap-2 w-full">
-                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
-                              <User className="size-6 text-muted-foreground" />
+                            <div className="relative">
+                              <div className={cn(
+                                "size-14 rounded-full bg-muted flex items-center justify-center transition-all",
+                                isPlayerServing(positions.pos3)
+                                  ? "ring-4 ring-brand-green ring-offset-2 ring-offset-background animate-pulse"
+                                  : "ring-4 ring-muted/20"
+                              )}>
+                                <User className="size-6 text-muted-foreground" />
+                              </div>
+                              {isPlayerServing(positions.pos3) && (
+                                <div className="absolute -top-1 -right-1 bg-brand-green text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                  Serve
+                                </div>
+                              )}
                             </div>
                             <span className="text-xs font-bold text-center truncate w-full px-1">
                               {getPlayerById(positions.pos3)?.name ||
@@ -756,8 +812,20 @@ export default function RefereeClient() {
                         {/* Bottom - pos4 */}
                         <div className="flex-1 flex flex-col items-center justify-center p-2 relative group hover:bg-muted/5 transition-colors">
                           <div className="flex flex-col items-center gap-2 w-full">
-                            <div className="size-14 rounded-full bg-muted flex items-center justify-center ring-4 ring-muted/20">
-                              <User className="size-6 text-muted-foreground" />
+                            <div className="relative">
+                              <div className={cn(
+                                "size-14 rounded-full bg-muted flex items-center justify-center transition-all",
+                                isPlayerServing(positions.pos4)
+                                  ? "ring-4 ring-brand-green ring-offset-2 ring-offset-background animate-pulse"
+                                  : "ring-4 ring-muted/20"
+                              )}>
+                                <User className="size-6 text-muted-foreground" />
+                              </div>
+                              {isPlayerServing(positions.pos4) && (
+                                <div className="absolute -top-1 -right-1 bg-brand-green text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                  Serve
+                                </div>
+                              )}
                             </div>
                             <span className="text-xs font-bold text-center truncate w-full px-1">
                               {getPlayerById(positions.pos4)?.name ||
@@ -887,27 +955,57 @@ export default function RefereeClient() {
                 {isTeamAssigned("left") ? (
                   <>
                     {positions.pos1 && (
-                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
-                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 bg-muted/20 rounded-xl border transition-all",
+                        isPlayerServing(positions.pos1)
+                          ? "border-brand-blue/50 bg-brand-blue/5"
+                          : "border-border/50"
+                      )}>
+                        <div className={cn(
+                          "size-8 rounded-full flex items-center justify-center border transition-all",
+                          isPlayerServing(positions.pos1)
+                            ? "bg-brand-blue/10 border-brand-blue ring-2 ring-brand-blue/30"
+                            : "bg-muted border-border"
+                        )}>
                             <User className="size-4 text-muted-foreground" />
                         </div>
-                        <span className="font-bold text-sm">
+                        <span className="font-bold text-sm flex-1">
                           {getPlayerById(positions.pos1)?.name ||
                             getPlayerById(positions.pos1)?.username ||
                             "Player"}
                         </span>
+                        {isPlayerServing(positions.pos1) && (
+                          <span className="text-[10px] font-black bg-brand-blue text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Serving
+                          </span>
+                        )}
                       </div>
                     )}
                     {positions.pos2 && (
-                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
-                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 bg-muted/20 rounded-xl border transition-all",
+                        isPlayerServing(positions.pos2)
+                          ? "border-brand-blue/50 bg-brand-blue/5"
+                          : "border-border/50"
+                      )}>
+                        <div className={cn(
+                          "size-8 rounded-full flex items-center justify-center border transition-all",
+                          isPlayerServing(positions.pos2)
+                            ? "bg-brand-blue/10 border-brand-blue ring-2 ring-brand-blue/30"
+                            : "bg-muted border-border"
+                        )}>
                             <User className="size-4 text-muted-foreground" />
                         </div>
-                        <span className="font-bold text-sm">
+                        <span className="font-bold text-sm flex-1">
                           {getPlayerById(positions.pos2)?.name ||
                             getPlayerById(positions.pos2)?.username ||
                             "Player"}
                         </span>
+                        {isPlayerServing(positions.pos2) && (
+                          <span className="text-[10px] font-black bg-brand-blue text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Serving
+                          </span>
+                        )}
                       </div>
                     )}
                   </>
@@ -922,27 +1020,57 @@ export default function RefereeClient() {
                 {isTeamAssigned("right") ? (
                   <>
                     {positions.pos3 && (
-                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
-                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 bg-muted/20 rounded-xl border transition-all",
+                        isPlayerServing(positions.pos3)
+                          ? "border-brand-green/50 bg-brand-green/5"
+                          : "border-border/50"
+                      )}>
+                        <div className={cn(
+                          "size-8 rounded-full flex items-center justify-center border transition-all",
+                          isPlayerServing(positions.pos3)
+                            ? "bg-brand-green/10 border-brand-green ring-2 ring-brand-green/30"
+                            : "bg-muted border-border"
+                        )}>
                             <User className="size-4 text-muted-foreground" />
                         </div>
-                        <span className="font-bold text-sm">
+                        <span className="font-bold text-sm flex-1">
                           {getPlayerById(positions.pos3)?.name ||
                             getPlayerById(positions.pos3)?.username ||
                             "Player"}
                         </span>
+                        {isPlayerServing(positions.pos3) && (
+                          <span className="text-[10px] font-black bg-brand-green text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Serving
+                          </span>
+                        )}
                       </div>
                     )}
                     {positions.pos4 && (
-                      <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/50">
-                        <div className="size-8 bg-muted rounded-full flex items-center justify-center border border-border">
+                      <div className={cn(
+                        "flex items-center gap-3 p-3 bg-muted/20 rounded-xl border transition-all",
+                        isPlayerServing(positions.pos4)
+                          ? "border-brand-green/50 bg-brand-green/5"
+                          : "border-border/50"
+                      )}>
+                        <div className={cn(
+                          "size-8 rounded-full flex items-center justify-center border transition-all",
+                          isPlayerServing(positions.pos4)
+                            ? "bg-brand-green/10 border-brand-green ring-2 ring-brand-green/30"
+                            : "bg-muted border-border"
+                        )}>
                             <User className="size-4 text-muted-foreground" />
                         </div>
-                        <span className="font-bold text-sm">
+                        <span className="font-bold text-sm flex-1">
                           {getPlayerById(positions.pos4)?.name ||
                             getPlayerById(positions.pos4)?.username ||
                             "Player"}
                         </span>
+                        {isPlayerServing(positions.pos4) && (
+                          <span className="text-[10px] font-black bg-brand-green text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Serving
+                          </span>
+                        )}
                       </div>
                     )}
                   </>
