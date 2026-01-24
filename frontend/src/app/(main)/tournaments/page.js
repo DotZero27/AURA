@@ -2,60 +2,136 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useTournaments } from "@/hooks/useTournaments";
 import { TournamentCard } from "@/components/tournaments/TournamentCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Zap, Users } from "lucide-react";
+import { Search, Filter, Zap, Users, Trophy, Dot } from "lucide-react";
+import { gamesApi } from "@/lib/api";
 import {
   ScrollablePage,
   ScrollablePageHeader,
   ScrollablePageContent,
 } from "@/components/layout/ScrollablePage";
+import { GENDER_FILTERS } from "@/config";
 
 export default function HomePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({});
   const [showLiveOnly, setShowLiveOnly] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState("");
 
-  const { data: tournamentsData, isLoading, error } = useTournaments(filters);
+  // Fetch games for filter
+  const { data: gamesData } = useQuery({
+    queryKey: ["games"],
+    queryFn: async () => {
+      const response = await gamesApi.getAll();
+      return response.data.data;
+    },
+  });
+
+  const games = gamesData?.games || [];
+
+  // Build filters object
+  const queryFilters = useMemo(() => {
+    const filterObj = {};
+    
+    // Add gender filter if set
+    if (filters.eligible_gender) {
+      filterObj.eligible_gender = filters.eligible_gender;
+    }
+    
+    // Add status filter
+    if (showCompleted) {
+      filterObj.status = "completed";
+    } else if (showLiveOnly) {
+      filterObj.status = "live";
+    }
+    
+    // Add game filter
+    if (selectedGameId) {
+      filterObj.game_id = selectedGameId;
+    }
+    
+    return filterObj;
+  }, [filters, showLiveOnly, showCompleted, selectedGameId]);
+
+  const { data: tournamentsData, isLoading, error } = useTournaments(queryFilters);
 
   const allTournaments = tournamentsData?.tournaments || [];
-
-  const isTournamentLive = (tournament) => {
-    if (!tournament.start_date || !tournament.end_date) return false;
-    const now = new Date();
-    const startTime = new Date(tournament.start_date);
-    const endTime = new Date(tournament.end_date);
-    return now >= startTime && now <= endTime;
-  };
 
   const tournaments = useMemo(() => {
     let filtered = allTournaments;
 
-    if (showLiveOnly) {
-      filtered = filtered.filter(isTournamentLive);
-    }
-
+    // Note: Status filtering is now handled by backend via queryFilters
+    // Only apply client-side filtering for search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (tournament) =>
           tournament.name?.toLowerCase().includes(query) ||
           tournament.venue?.name?.toLowerCase().includes(query) ||
-          tournament.venue?.address?.toLowerCase().includes(query)
+          tournament.venue?.address?.toLowerCase().includes(query) ||
+          tournament.game?.name?.toLowerCase().includes(query)
       );
     }
 
+    // Sort tournaments: tournaments starting within an hour on top
+    const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    
+    filtered.sort((a, b) => {
+      const aStart = a.start_date ? new Date(a.start_date) : null;
+      const bStart = b.start_date ? new Date(b.start_date) : null;
+      
+      // Check if tournament starts within an hour
+      const aStartsSoon = aStart && aStart > now && aStart <= oneHourFromNow;
+      const bStartsSoon = bStart && bStart > now && bStart <= oneHourFromNow;
+      
+      // Tournaments starting within an hour come first
+      if (aStartsSoon && !bStartsSoon) return -1;
+      if (!aStartsSoon && bStartsSoon) return 1;
+      
+      // Then sort by start date (earliest first)
+      if (aStart && bStart) {
+        return aStart - bStart;
+      }
+      if (aStart) return -1;
+      if (bStart) return 1;
+      return 0;
+    });
+
     return filtered;
-  }, [allTournaments, showLiveOnly, searchQuery]);
+  }, [allTournaments, searchQuery]);
+
 
   const handleFilterClick = (gender) => {
-    setFilters((prev) => ({
-      ...prev,
-      eligible_gender: prev.eligible_gender === gender ? undefined : gender,
-    }));
+    setFilters((prev) => {
+      // If clicking the same filter, clear it
+      if (prev.eligible_gender === gender) {
+        const { eligible_gender, ...rest } = prev;
+        return rest;
+      }
+      // Otherwise, set the new filter
+      return {
+        ...prev,
+        eligible_gender: gender,
+      };
+    });
+  };
+
+  const handleGameFilterClick = (gameId) => {
+    setSelectedGameId((prev) => {
+      // If clicking the same game, clear it
+      if (prev === gameId) {
+        return "";
+      }
+      // Otherwise, set the new game filter
+      return gameId;
+    });
   };
 
   return (
@@ -85,57 +161,112 @@ export default function HomePage() {
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none mask-fade-right">
-            <Button
-              variant={showLiveOnly ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setShowLiveOnly(!showLiveOnly)}
-              className={`rounded-full px-4 h-8 text-xs font-medium border ${
-                showLiveOnly
-                  ? "border-transparent animate-pulse"
-                  : "border-transparent bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Zap
-                className={`size-3.5 mr-1.5 ${
-                  showLiveOnly ? "fill-current" : ""
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-none mask-[linear-gradient(to_right,transparent,white_2%,white_92%,transparent)]">
+              <Button
+                variant={showLiveOnly ? "default" : "secondary"}
+                size="sm"
+                onClick={() => {
+                  setShowLiveOnly(!showLiveOnly);
+                  setShowCompleted(false);
+                }}
+                className={`rounded-full px-4 h-8 text-xs font-medium border ${
+                  showLiveOnly
+                    ? "border-transparent animate-pulse"
+                    : "border-transparent bg-muted text-muted-foreground hover:text-foreground"
                 }`}
-              />
-              Live Now
-            </Button>
+              >
+                <Zap
+                  className={`size-3.5 mr-1.5 ${
+                    showLiveOnly ? "fill-current" : ""
+                  }`}
+                />
+                Live Now
+              </Button>
+              <Button
+                variant={showCompleted ? "default" : "secondary"}
+                size="sm"
+                onClick={() => {
+                  setShowCompleted(!showCompleted);
+                  setShowLiveOnly(false);
+                }}
+                className={`rounded-full px-4 h-8 text-xs font-medium border ${
+                  showCompleted
+                    ? "border-transparent"
+                    : "border-transparent bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Trophy className="size-3.5 mr-1.5" />
+                Completed
+              </Button>
 
-            <div className="w-px h-6 bg-border mx-1 self-center" />
+              <Button
+                size="sm"
+                onClick={() => handleFilterClick(GENDER_FILTERS.Men)}
+                variant={
+                  filters.eligible_gender === GENDER_FILTERS.Men ? "default" : "outline"
+                }
+                className={`rounded-full h-8 text-xs border ${
+                  filters.eligible_gender === GENDER_FILTERS.Men
+                    ? ""
+                    : "border-dashed border-muted-foreground/30 text-muted-foreground"
+                }`}
+              >
+                <Users className="size-3.5 mr-1.5" />
+                Men's Doubles
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleFilterClick(GENDER_FILTERS.Women)}
+                variant={
+                  filters.eligible_gender === GENDER_FILTERS.Women ? "default" : "outline"
+                }
+                className={`rounded-full h-8 text-xs border ${
+                  filters.eligible_gender === GENDER_FILTERS.Women
+                    ? ""
+                    : "border-dashed border-muted-foreground/30 text-muted-foreground"
+                }`}
+              >
+                <Users className="size-3.5 mr-1.5" />
+                Women's Doubles
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleFilterClick(GENDER_FILTERS.Mixed)}
+                variant={
+                  filters.eligible_gender === GENDER_FILTERS.Mixed ? "default" : "outline"
+                }
+                className={`rounded-full h-8 text-xs border ${
+                  filters.eligible_gender === GENDER_FILTERS.Mixed
+                    ? ""
+                    : "border-dashed border-muted-foreground/30 text-muted-foreground"
+                }`}
+              >
+                <Users className="size-3.5 mr-1.5" />
+                Mixed Doubles
+              </Button>
+            </div>
 
-            <Button
-              size="sm"
-              onClick={() => handleFilterClick("male")}
-              variant={
-                filters.eligible_gender === "male" ? "default" : "outline"
-              }
-              className={`rounded-full h-8 text-xs border ${
-                filters.eligible_gender === "male"
-                  ? ""
-                  : "border-dashed border-muted-foreground/30 text-muted-foreground"
-              }`}
-            >
-              <Users className="size-3.5 mr-1.5" />
-              Men's Doubles
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleFilterClick("female")}
-              variant={
-                filters.eligible_gender === "female" ? "default" : "outline"
-              }
-              className={`rounded-full h-8 text-xs border ${
-                filters.eligible_gender === "female"
-                  ? ""
-                  : "border-dashed border-muted-foreground/30 text-muted-foreground"
-              }`}
-            >
-              <Users className="size-3.5 mr-1.5" />
-              Women's Doubles
-            </Button>
+            {/* Game Filter */}
+            {games.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none mask-fade-right">
+                {games.map((game) => (
+                  <Button
+                    key={game.id}
+                    size="sm"
+                    onClick={() => handleGameFilterClick(String(game.id))}
+                    variant={selectedGameId === String(game.id) ? "default" : "outline"}
+                    className={`rounded-full h-8 text-xs border ${
+                      selectedGameId === String(game.id)
+                        ? ""
+                        : "border-dashed border-muted-foreground/30 text-muted-foreground"
+                    }`}
+                  >
+                    {game.name}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </ScrollablePageHeader>
@@ -190,12 +321,12 @@ export default function HomePage() {
                   No tournaments found
                 </h3>
                 <p className="text-muted-foreground text-sm max-w-[250px] mx-auto">
-                  {searchQuery || showLiveOnly || filters.eligible_gender
+                  {searchQuery || showLiveOnly || showCompleted || filters.eligible_gender || selectedGameId
                     ? "Try adjusting your filters or search query."
                     : "There are no upcoming tournaments at the moment."}
                 </p>
               </div>
-              {!searchQuery && !showLiveOnly && !filters.eligible_gender && (
+              {!searchQuery && !showLiveOnly && !showCompleted && !filters.eligible_gender && !selectedGameId && (
                 <Button
                   onClick={() => router.push("/tournaments/new")}
                   className="rounded-full px-6"

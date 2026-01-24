@@ -32,6 +32,8 @@ export async function getAllTournaments(c: Context<AuthContext>) {
     const queryParams = ((c.req as any).valid("query") as any) as z.infer<typeof tournamentQuerySchema>;
     const maxAge = queryParams.max_age;
     const eligibleGender = queryParams.eligible_gender;
+    const gameId = queryParams.game_id;
+    const status = queryParams.status;
 
     // Get player info for eligibility calculation
     const { data: player, error: playerError } = await supabase
@@ -63,6 +65,11 @@ export async function getAllTournaments(c: Context<AuthContext>) {
       end_time,
       registration_fee,
       capacity,
+      game_id,
+      games:games (
+        id,
+        name
+      ),
       match_format:match_format (
         id,
         type,
@@ -75,19 +82,9 @@ export async function getAllTournaments(c: Context<AuthContext>) {
       )
     `);
 
-    // Apply filters if provided
-    if (maxAge) {
-      query = query.eq("match_format.max_age", maxAge);
-    }
-    if (eligibleGender) {
-      const genderUpper = eligibleGender.toUpperCase();
-      if (genderUpper === "MALE") {
-        query = query.eq("match_format.eligible_gender", "M");
-      } else if (genderUpper === "FEMALE") {
-        query = query.eq("match_format.eligible_gender", "W");
-      } else {
-        query = query.eq("match_format.eligible_gender", genderUpper);
-      }
+    // Apply filters that work with Supabase query builder
+    if (gameId) {
+      query = query.eq("game_id", gameId);
     }
 
     const { data: tournaments, error: tourError } = await query;
@@ -96,9 +93,59 @@ export async function getAllTournaments(c: Context<AuthContext>) {
       throw new HTTPException(500, { message: tourError.message });
     }
 
+    // Filter by status, max_age, and eligible_gender after fetching (nested relations)
+    let filteredTournaments = tournaments;
+    
+    if (status) {
+      const now = new Date();
+      filteredTournaments = filteredTournaments?.filter((t: any) => {
+        const startTime = t.start_time ? new Date(t.start_time) : null;
+        const endTime = t.end_time ? new Date(t.end_time) : null;
+        
+        if (status === "completed") {
+          return endTime && now > endTime;
+        } else if (status === "live") {
+          return startTime && endTime && now >= startTime && now <= endTime;
+        } else if (status === "upcoming") {
+          return startTime && now < startTime;
+        }
+        return true;
+      });
+    }
+
+    if (maxAge) {
+      filteredTournaments = filteredTournaments?.filter((t: any) => {
+        const matchFormat = Array.isArray(t.match_format)
+          ? t.match_format[0]
+          : t.match_format;
+        const maxAgeLimit = matchFormat?.max_age ?? 100;
+        return maxAgeLimit === maxAge;
+      });
+    }
+
+    if (eligibleGender) {
+      const genderUpper = eligibleGender.toUpperCase();
+      let targetGender: string;
+      if (genderUpper === "MALE") {
+        targetGender = "M";
+      } else if (genderUpper === "FEMALE") {
+        targetGender = "W";
+      } else {
+        targetGender = genderUpper;
+      }
+      
+      filteredTournaments = filteredTournaments?.filter((t: any) => {
+        const matchFormat = Array.isArray(t.match_format)
+          ? t.match_format[0]
+          : t.match_format;
+        const eligibleGenderValue = matchFormat?.eligible_gender ?? "MW";
+        return eligibleGenderValue === targetGender;
+      });
+    }
+
     // Format tournaments with registration status and eligibility
     const formatted =
-      tournaments?.map((t: any) => {
+      filteredTournaments?.map((t: any) => {
         const matchFormat = Array.isArray(t.match_format)
           ? t.match_format[0]
           : t.match_format;
@@ -126,6 +173,9 @@ export async function getAllTournaments(c: Context<AuthContext>) {
 
         // Get venue data (handle both object and array formats)
         const venue = Array.isArray(t.venue) ? t.venue[0] : t.venue;
+        
+        // Get game data (handle both object and array formats)
+        const game = Array.isArray(t.games) ? t.games[0] : t.games;
 
         return {
           id: t.id,
@@ -142,6 +192,10 @@ export async function getAllTournaments(c: Context<AuthContext>) {
           start_date: t.start_time,
           end_date: t.end_time,
           capacity: t.capacity,
+          game: {
+            id: game?.id || t.game_id || null,
+            name: game?.name || null,
+          },
           match_format: {
             type: matchFormat?.type || null,
             max_age: matchFormat?.max_age || null,
@@ -1311,6 +1365,18 @@ export async function createTournament(c: Context<AuthContext>) {
       throw new HTTPException(404, { message: "Venue not found" });
     }
 
+    // Verify game exists and is enabled
+    const { data: game, error: gameError } = await supabase
+      .from("games")
+      .select("id")
+      .eq("id", body.game_id)
+      .eq("enabled", true)
+      .single();
+
+    if (gameError || !game) {
+      throw new HTTPException(404, { message: "Game not found or disabled" });
+    }
+
     // Auto-generate type based on eligible_gender
     let matchFormatType: string;
     switch (body.match_format.eligible_gender) {
@@ -1352,6 +1418,7 @@ export async function createTournament(c: Context<AuthContext>) {
         name: body.name,
         description: body.description,
         venue_id: body.venue_id,
+        game_id: body.game_id,
         match_format_id: matchFormat.id,
         start_time: body.start_time,
         end_time: body.end_time,

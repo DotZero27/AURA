@@ -39,5 +39,8 @@ apiClient.interceptors.response.use(
   }
 );
 
-export default apiClient;
-
+export const GENDER_FILTERS = {
+  Men: "M",
+  Women: "W",
+  Mixed: "MW",
+};

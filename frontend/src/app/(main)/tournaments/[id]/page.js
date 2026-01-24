@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTournament } from "@/hooks/useTournament";
 import { useUser } from "@/hooks/useUser";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { tournamentsApi } from "@/lib/api";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { tournamentsApi, tournamentEngineApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -27,7 +27,7 @@ import {
   Star,
   Zap,
 } from "lucide-react";
-import { formatTime, formatDateWithDay } from "@/lib/utils";
+import { formatTime, formatDateWithDay, getTournamentCategory } from "@/lib/utils";
 import {
   ScrollablePage,
   ScrollablePageHeader,
@@ -48,6 +48,22 @@ export default function TournamentDetailsPage() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [teamId, setTeamId] = useState(null);
   const { invites } = useTournamentInvites(params.id);
+
+  // Fetch teams for the tournament
+  const { data: teamsData } = useQuery({
+    queryKey: ['tournament-teams', params.id],
+    queryFn: async () => {
+      try {
+        const response = await tournamentEngineApi.getTeams(params.id);
+        return response.data.data;
+      } catch (error) {
+        // If teams endpoint fails, return null (fallback to flat list)
+        return null;
+      }
+    },
+    enabled: !!params.id,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
   // Check if current user is the host
   const tournamentId = parseInt(params.id);
@@ -114,12 +130,7 @@ export default function TournamentDetailsPage() {
     metadata,
   } = tournament;
 
-  const category =
-    match_format?.eligible_gender === "M"
-      ? "Men's Doubles"
-      : match_format?.eligible_gender === "W"
-      ? "Women's Doubles"
-      : "Mixed Doubles";
+  const category = getTournamentCategory(match_format);
 
   const registeredCount = registered_count || 0;
   const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
@@ -261,17 +272,87 @@ export default function TournamentDetailsPage() {
                 ))}
             </div>
 
-            {/* Registered Players */}
+            {/* Registered Players / Teams */}
             <div className="space-y-3 pb-8">
                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">Roster ({registeredCount})</h3>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-muted-foreground">
+                        {teamsData?.teams && teamsData.teams.length > 0 ? `Teams (${teamsData.teams.length})` : `Roster (${registeredCount})`}
+                    </h3>
                     {progress > 0 && (
                         <div className="text-xs font-bold text-primary">{Math.round(progress)}% Full</div>
                     )}
                  </div>
                  
-                 <div className="grid gap-2">
-                     {registered_players && registered_players.length > 0 ? (
+                 <div className="grid gap-3">
+                     {teamsData?.teams && teamsData.teams.length > 0 ? (
+                        // Show teams with members
+                        teamsData.teams.map((team) => {
+                            // Find player objects for this team
+                            const player1 = registered_players?.find(p => p.id === team.player1_id);
+                            const player2 = registered_players?.find(p => p.id === team.player2_id);
+                            
+                            // Build team members array
+                            const teamMembers = [];
+                            if (player1) teamMembers.push(player1);
+                            if (player2) teamMembers.push(player2);
+                            
+                            return (
+                                <div 
+                                    key={team.team_id} 
+                                    className="bg-muted/20 rounded-xl border border-border/50 p-3 space-y-2"
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                            {team.display_name || `Team ${team.team_id}`}
+                                        </span>
+                                        {team.avg_rating > 0 && (
+                                            <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                                <Zap className="size-3 fill-primary text-primary" /> 
+                                                {(team.avg_rating || 0).toFixed(1)} Avg
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        {teamMembers.length > 0 ? (
+                                            teamMembers.map((player) => (
+                                                <div 
+                                                    key={player.id}
+                                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                                                    onClick={() => router.push(`/players/${player.id}`)}
+                                                >
+                                                    <div className="relative">
+                                                        {player.photo_url ? (
+                                                            <img src={player.photo_url} alt={player.name} className="size-10 rounded-full object-cover border border-border" />
+                                                        ) : (
+                                                            <div className="size-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground border border-border">
+                                                                <Users className="size-5" />
+                                                            </div>
+                                                        )}
+                                                        <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border">
+                                                            <div className="bg-green-500 size-2.5 rounded-full" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-bold truncate">{player.name || player.username}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1">
+                                                                <Zap className="size-3 fill-primary text-primary" /> {player.aura?.toFixed(1) || "0.0"} Aura
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-xs text-muted-foreground/70 italic p-2">
+                                                Team members pending...
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                     ) : registered_players && registered_players.length > 0 ? (
+                        // Fallback to flat list if no teams
                         registered_players.map((player) => (
                              <div 
                                 key={player.id} 

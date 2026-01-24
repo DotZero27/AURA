@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CalendarDays, Clock, MapPin, Users, Trophy, Zap } from "lucide-react";
-import { formatTime, formatDate } from "@/lib/utils";
+import { formatTime, formatDate, getTournamentCategory } from "@/lib/utils";
 
 export function TournamentCard({ tournament, index }) {
   const {
@@ -24,7 +24,9 @@ export function TournamentCard({ tournament, index }) {
     venue,
     capacity,
     registered,
+    registered_count,
     match_format,
+    game,
   } = tournament;
 
   const isTournamentLive = () => {
@@ -49,14 +51,9 @@ export function TournamentCard({ tournament, index }) {
     return <Badge variant="outline" className="border-primary/20 text-primary bg-primary/5">OPEN</Badge>;
   };
 
-  const categoryLabel =
-    match_format?.eligible_gender === "M"
-      ? "Men's Doubles"
-      : match_format?.eligible_gender === "W"
-      ? "Women's Doubles"
-      : "Mixed Doubles";
+  const categoryLabel = getTournamentCategory(match_format);
 
-  const registeredCount = tournament.registered_count || 0;
+  const registeredCount = registered_count || 0;
   const progress = capacity > 0 ? (registeredCount / capacity) * 100 : 0;
 
   return (
@@ -76,7 +73,9 @@ export function TournamentCard({ tournament, index }) {
                <Trophy className="text-white/30 size-12 transform -rotate-12 group-hover:scale-110 transition-transform duration-500" />
                
                <div className="absolute bottom-0 inset-x-0 bg-black/40 backdrop-blur-[2px] p-1 text-center">
-                 <span className="text-[10px] font-black text-white uppercase tracking-wider">{categoryLabel}</span>
+                 <span className="text-[10px] font-black text-white uppercase tracking-wider">
+                   {game?.name ? `${game.name} - ${categoryLabel}` : categoryLabel}
+                 </span>
                </div>
             </div>
 

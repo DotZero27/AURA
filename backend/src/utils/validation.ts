@@ -4,6 +4,8 @@ import { z } from "zod";
 export const tournamentQuerySchema = z.object({
   max_age: z.string().regex(/^\d+$/).transform(Number).optional(),
   eligible_gender: z.enum(["M", "W", "MW", "male", "female"]).optional(),
+  game_id: z.string().regex(/^\d+$/).transform(Number).optional(),
+  status: z.enum(["upcoming", "live", "completed"]).optional(),
   mini: z.enum(["true", "false"]).optional(),
 });
 
@@ -229,6 +231,7 @@ export const createTournamentSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().min(1, "Description is required"),
   venue_id: z.number().int().positive(),
+  game_id: z.number().int().positive(),
   match_format: createTournamentMatchFormatSchema, // Match format without type (auto-generated)
   start_time: z.string().datetime(),
   end_time: z.string().datetime(),

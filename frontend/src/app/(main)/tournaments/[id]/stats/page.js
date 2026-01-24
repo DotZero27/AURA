@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trophy, Users, Crown, Medal, ChevronRight, Zap, Target, Award } from "lucide-react";
+import { getTournamentCategory } from "@/lib/utils";
 
 // Group Standings Component for Group+Knockout format
 function GroupStandings({ standings, engineInfo, matches, selectedRound }) {
@@ -699,12 +700,7 @@ export default function TournamentStatsPage() {
     );
   }
 
-  const category =
-    tournament.match_format?.eligible_gender === "M"
-      ? "Men's Doubles"
-      : tournament.match_format?.eligible_gender === "W"
-        ? "Women's Doubles"
-        : "Mixed Doubles";
+  const category = getTournamentCategory(tournament.match_format);
 
   // Swiss format data
   const pairings = roundData?.round?.pairings || [];
@@ -874,10 +870,6 @@ export default function TournamentStatsPage() {
       </ScrollablePageHeader>
 
       <ScrollablePageContent className="pb-24 pt-4">
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 inset-x-0 h-48 bg-linear-to-b from-brand-blue/10 to-transparent skew-y-3 origin-top-left scale-110 pointer-events-none -z-10" />
-        <div className="absolute top-0 right-0 size-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none -z-10" />
-
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col h-full">
           <div className="px-4 mb-4">

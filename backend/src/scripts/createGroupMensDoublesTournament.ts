@@ -104,12 +104,13 @@ async function createGroupMensDoublesTournament() {
     console.log(`✅ Created match format (ID: ${matchFormat.id})\n`);
 
     // Step 5: Check and delete existing tournament if it exists
-    const tournamentName = 'Review Group Mixed Doubles Tournament';
+    const tournamentName = 'Badminton Group Mixed Doubles Tournament';
     console.log('🔍 Checking for existing tournament...');
     const { data: existingTournaments, error: checkError } = await supabase
       .from('tournaments')
       .select('id')
-      .eq('name', tournamentName);
+      .eq('name', tournamentName)
+      .eq('game_id', 2);
 
     if (checkError) {
       throw new Error(`Failed to check for existing tournament: ${checkError.message}`);
@@ -224,6 +225,7 @@ async function createGroupMensDoublesTournament() {
       .from('tournaments')
       .insert({
         host_id: hostPlayer.id,
+        game_id: 2, // 1: pickleball, 2: badminton
         name: tournamentName,
         description: 'Automated group stage mixed doubles tournament with 6 teams (12 players)',
         venue_id: venue.id,

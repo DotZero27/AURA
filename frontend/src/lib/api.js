@@ -193,6 +193,14 @@ export const venuesApi = {
   },
 };
 
+// Games API
+export const gamesApi = {
+  // GET /games - Get all enabled games
+  getAll: () => {
+    return apiClient.get('/games');
+  },
+};
+
 // Match Formats API
 export const matchFormatsApi = {
   // GET /match-formats - Get all match formats

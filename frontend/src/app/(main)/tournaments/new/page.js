@@ -5,10 +5,17 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import * as z from "zod";
-import { tournamentsApi, venuesApi } from "@/lib/api";
+import { tournamentsApi, venuesApi, gamesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Field,
   FieldLabel,
@@ -66,6 +73,14 @@ const formSchema = z
     name: z.string().min(1, "Tournament name is required"),
     description: z.string().min(1, "Description is required"),
     tournament_format: z.enum(['swiss', 'group_knockout']).default('swiss'),
+    game_id: z
+      .string()
+      .min(1, "Game is required")
+      .transform((val) => {
+        const num = parseInt(val);
+        if (isNaN(num)) throw new Error("Invalid game ID");
+        return num;
+      }),
     venue_id: z
       .string()
       .min(1, "Venue is required")
@@ -184,6 +199,17 @@ export default function CreateTournamentPage() {
 
   const venues = venuesData?.venues || [];
 
+  // Fetch games
+  const { data: gamesData, isLoading: gamesLoading } = useQuery({
+    queryKey: ["games"],
+    queryFn: async () => {
+      const response = await gamesApi.getAll();
+      return response.data.data;
+    },
+  });
+
+  const games = gamesData?.games || [];
+
   // Create tournament mutation
   const createMutation = useMutation({
     mutationFn: async (data) => {
@@ -208,6 +234,7 @@ export default function CreateTournamentPage() {
       name: "",
       description: "",
       tournament_format: "swiss",
+      game_id: "",
       venue_id: "",
       match_format: {
         eligible_gender: "MW",
@@ -274,6 +301,7 @@ export default function CreateTournamentPage() {
         const submitData = {
           name: parsed.name,
           description: parsed.description,
+          game_id: Number(parsed.game_id),
           venue_id: Number(parsed.venue_id),
           match_format: {
             min_age:
@@ -414,6 +442,55 @@ export default function CreateTournamentPage() {
                               rows={4}
                               className="w-full min-h-[100px] rounded-xl border border-transparent bg-muted/40 px-4 py-3 text-sm transition-all outline-none focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20"
                             />
+                            {isInvalid && (
+                              <FieldError errors={field.state.meta.errors} />
+                            )}
+                          </Field>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {/* Game Section */}
+                  <div className="space-y-4 pt-6 border-t border-border/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Trophy className="size-4 text-primary" />
+                      </div>
+                      <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Game</h3>
+                    </div>
+
+                    <form.Field
+                      name="game_id"
+                      children={(field) => {
+                        const isInvalid =
+                          field.state.meta.isTouched && !field.state.meta.isValid;
+                        return (
+                          <Field data-invalid={isInvalid}>
+                            <FieldLabel htmlFor={field.name} className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Game *</FieldLabel>
+                            <Select
+                              value={field.state.value || ""}
+                              onValueChange={(value) => {
+                                field.handleChange(value);
+                                field.handleBlur();
+                              }}
+                              disabled={gamesLoading}
+                            >
+                              <SelectTrigger
+                                id={field.name}
+                                aria-invalid={isInvalid}
+                                className="w-full h-11 rounded-xl border border-transparent bg-muted/40 px-4 py-2 text-sm transition-all outline-none focus:bg-background focus:border-input focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                              >
+                                <SelectValue placeholder="Select a game" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {games.map((game) => (
+                                  <SelectItem key={game.id} value={String(game.id)}>
+                                    {game.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             {isInvalid && (
                               <FieldError errors={field.state.meta.errors} />
                             )}
